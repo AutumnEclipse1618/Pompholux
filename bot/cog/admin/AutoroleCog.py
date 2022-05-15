@@ -105,14 +105,23 @@ class AutoroleDropdownView(RawView):
         await interaction.response.defer()
         dropdown_component = discord.utils.get(walk_components(interaction.message), custom_id=cls.custom_id)
         data: discord.types.interactions.SelectMessageComponentInteractionData = interaction.data
-        all_roles = set([tryint(cls.value_regex.fullmatch(o.value)[1]) for o in dropdown_component.options])
-        roles = set([tryint(cls.value_regex.fullmatch(v)[1]) for v in data["values"]])
+        user_roles = {discord.Object(r_.id) for r_ in interaction.user.roles}
+        all_roles = {
+            discord.Object(r)
+            for r in (tryint(cls.value_regex.fullmatch(o.value)[1]) for o in dropdown_component.options)
+            if r is not None
+        }
+        roles = {
+            discord.Object(r)
+            for r in (tryint(cls.value_regex.fullmatch(v)[1]) for v in data["values"])
+            if r is not None
+        }
         await interaction.user.add_roles(
-            *(discord.Object(r) for r in roles if r is not None),
+            *(roles - user_roles),
             reason="Autorole"
         )
         await interaction.user.remove_roles(
-            *(discord.Object(r) for r in all_roles - roles if r is not None),
+            *(user_roles & (all_roles - roles)),
             reason="Autorole"
         )
 
