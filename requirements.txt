@@ -1,0 +1,6 @@
+dacite
+
+six
+emojipy @ git+https://github.com/joypixels/emoji-toolkit#subdirectory=lib/python
+
+discord.py @ git+https://github.com/Rapptz/discord.py@40176bb71b903461499c74e6f55247a3d71ac0cb
