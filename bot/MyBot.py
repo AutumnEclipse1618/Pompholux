@@ -46,6 +46,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
                 await self._sync_debug_guilds()
             if self.app.config.Debug.SYNC_GLOBAL:
                 await self.tree.sync()
+        await self.change_presence(activity=discord.Game("with bubbles"))
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         print("------")
 
