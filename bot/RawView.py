@@ -13,7 +13,8 @@ class RawViewStore:
         self.raw_views: List[Type[RawViewT]] = []
 
     def add_raw_view(self, view: Type[RawViewT]):
-        # TODO view in self.raw_views raise ValueError?
+        if view in self.raw_views:
+            raise ValueError("Raw view already registered")
         self.raw_views.append(view)
 
     def remove_raw_view(self, view: Type[RawViewT]) -> bool:
