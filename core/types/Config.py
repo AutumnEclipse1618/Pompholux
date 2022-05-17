@@ -32,5 +32,5 @@ class Discord:
 class Config:
     """Main App Configuration"""
     Versions: Versions
-    Debug: Debug
     Discord: Discord
+    Debug: Debug = field(default_factory=Debug)
