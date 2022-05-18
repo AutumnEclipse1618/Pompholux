@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Pattern, Type, Typ
 import discord
 
 from discord.ext import commands
-import emojipy
 
 from core.util import make_escape, tryint, predicate_or
 from bot.MyCog import MyCog
@@ -318,10 +317,12 @@ class AutoroleButtonsForm(AutoroleFormBase, title='Create Autorole'):
             raise UserInputWarning(f':x: Unknown button style "{style}"') from ex
 
         if emoji is not None:
-            abp["emoji"] = discord.utils.get(interaction.guild.emojis, name=emoji) \
+            emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
                      or discord.utils.get(interaction.guild.emojis, id=emoji) \
-                     or emojipy.Emoji.shortcode_to_unicode(f":{emoji}:").strip(":")
-            # Emoji error is handled in on_submit
+                     or interaction.client.app.emoji.get(emoji)
+            if emoji_ is None:
+                raise UserInputWarning(":x: Invalid emoji")
+            abp["emoji"] = emoji_
 
         if (label_ := label if label is not None else (cls.ROLENAME if emoji is None else None)) is not None:
             abp["label"] = cls.label_unescape(cls.label_rolename_replace.sub(role_.name, cls.label_escape(label_)))
@@ -428,10 +429,12 @@ class AutoroleDropdownForm(AutoroleFormBase, title='Create Autorole'):
         abp["role"] = role_
 
         if emoji is not None:
-            abp["emoji"] = discord.utils.get(interaction.guild.emojis, name=emoji) \
+            emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
                      or discord.utils.get(interaction.guild.emojis, id=emoji) \
-                     or emojipy.Emoji.shortcode_to_unicode(f":{emoji}:").strip(":")
-            # Emoji error is handled in on_submit
+                     or interaction.client.app.emoji.get(emoji)
+            if emoji_ is None:
+                raise UserInputWarning(":x: Invalid emoji")
+            abp["emoji"] = emoji_
 
         if label is not None:
             label_, description, *_ = (*cls.label_escape(label).split(cls.DESC, 1), None)

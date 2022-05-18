@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 from core.types.app_abc import AppABC
 
@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 class MyApp(AppABC):
     config: "Config"
+    emoji: Dict[str, str]
     bot: "MyBot"
 
     def run(self):
