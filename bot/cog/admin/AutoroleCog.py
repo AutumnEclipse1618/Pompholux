@@ -259,20 +259,20 @@ class AutoroleFormBase(discord.ui.Modal, ABC):
         pass
 
 
-class AutoroleButtonsForm(AutoroleFormBase, title='Create Autorole'):
+class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
     view_type = AutoroleButtonsView
 
     content = discord.ui.TextInput(
-        label='Message Content',
+        label="Message Content",
         style=discord.TextStyle.long,
-        placeholder='Add (optional) message content here',
+        placeholder="Enter a string or JSON\n(See help page for JSON format)",
         required=False,
     )
 
     roles = discord.ui.TextInput(
-        label='Roles',
+        label="Roles",
         style=discord.TextStyle.long,
-        placeholder='Put a role ID on each line (max 25)',
+        placeholder="Put a role ID on each line\n(See help page for format)",
         required=True,
     )
     roles_regex = re.compile(
@@ -363,20 +363,20 @@ class AutoroleButtonsForm(AutoroleFormBase, title='Create Autorole'):
         return cls.prefill_class(message, content_, roles_)
 
 
-class AutoroleDropdownForm(AutoroleFormBase, title='Create Autorole'):
+class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)"):
     view_type = AutoroleDropdownView
 
     content = discord.ui.TextInput(
-        label='Message Content',
+        label="Message Content",
         style=discord.TextStyle.long,
-        placeholder='Add (optional) message content here',
+        placeholder="Enter a string or JSON\n(See help page for JSON format)",
         required=False,
     )
 
     roles = discord.ui.TextInput(
-        label='Roles',
+        label="Roles",
         style=discord.TextStyle.long,
-        placeholder='Put a role ID on each line (max 25)',
+        placeholder="Put a role ID on each line\n(See help page for format)",
         required=True,
     )
     roles_regex = re.compile(
@@ -527,8 +527,9 @@ class AutoroleType(enum.Enum):
 
 
 class AutoroleCog(MyCog["MyBot"], commands.Cog):
-    @discord.app_commands.command()
+    @discord.app_commands.command(description="Create an autorole message")
     @discord.app_commands.rename(type_="type")
+    @discord.app_commands.describe(type_="Component type")
     @discord.app_commands.guild_only()
     @discord.app_commands.default_permissions(administrator=True)
     async def autorole(self, ctx: discord.Interaction, type_: AutoroleType):
