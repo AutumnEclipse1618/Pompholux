@@ -214,8 +214,6 @@ class AutoroleFormBase(discord.ui.Modal, ABC):
         except ValueError as ex:
             raise UserInputWarning(":x: \"embeds\" has a maximum of 10 elements") from ex
         except discord.HTTPException as ex:
-            if "Invalid emoji" in ex.text:
-                raise UserInputWarning(":x: Invalid emoji") from ex
             raise UserInputWarning(":x: An error occurred") from ex
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
