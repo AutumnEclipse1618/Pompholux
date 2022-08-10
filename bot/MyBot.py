@@ -116,3 +116,15 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             case _:
                 self.my_logger.error("Ignoring exception in raw view %s", view.__name__, exc_info=ex)
                 await interaction.response.defer()
+
+    async def on_modal_error(self, modal: discord.ui.Modal, interaction: discord.Interaction, ex: Exception):
+        match ex:
+            case UserInputWarning(message):
+                if not interaction.response.is_done:
+                    await interaction.response.send_message(message, ephemeral=True)
+                else:
+                    await interaction.followup.send(message, ephemeral=True)
+            case _:
+                self.my_logger.error("Ignoring exception in modal %r:", modal, exc_info=ex)
+                if not interaction.response.is_done:
+                    await interaction.response.defer()

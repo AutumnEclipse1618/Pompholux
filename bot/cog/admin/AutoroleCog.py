@@ -10,6 +10,7 @@ from discord.ext import commands
 
 from core.util import make_escape, tryint, predicate_or
 from bot.MyCog import MyCog
+from bot.MyModal import MyModal
 from bot.error import UserInputWarning
 from bot.RawView import RawView
 from core.util.discord import walk_components
@@ -129,7 +130,7 @@ AutoroleViewT = TypeVar("AutoroleViewT", Type[AutoroleButtonsView], Type[Autorol
 AutoroleFormT = TypeVar("AutoroleFormT", Type["AutoroleButtonsForm"], Type["AutoroleDropdownForm"])
 
 
-class AutoroleFormBase(discord.ui.Modal, ABC):
+class AutoroleFormBase(MyModal, ABC):
     @property
     @abstractmethod
     def view_type(self) -> AutoroleViewT:
@@ -215,18 +216,6 @@ class AutoroleFormBase(discord.ui.Modal, ABC):
             raise UserInputWarning(":x: \"embeds\" has a maximum of 10 elements") from ex
         except discord.HTTPException as ex:
             raise UserInputWarning(":x: An error occurred") from ex
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception):
-        match error:
-            case UserInputWarning(message):
-                if not interaction.response.is_done:
-                    await interaction.response.send_message(message, ephemeral=True)
-                else:
-                    await interaction.followup.send(message, ephemeral=True)
-            case _:
-                await super().on_error(interaction, error)
-                if not interaction.response.is_done:
-                    await interaction.response.defer()
 
     prefill: discord.Message = None
 
