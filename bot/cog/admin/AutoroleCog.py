@@ -224,8 +224,7 @@ class AutoroleFormBase(discord.ui.Modal, ABC):
                 else:
                     await interaction.followup.send(message, ephemeral=True)
             case _:
-                if interaction.client.app.config.Debug.DEBUG:
-                    await super().on_error(interaction, error)
+                await super().on_error(interaction, error)
                 if not interaction.response.is_done:
                     await interaction.response.defer()
 

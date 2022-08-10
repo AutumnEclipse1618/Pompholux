@@ -1,9 +1,12 @@
+import logging
 import sys
 import traceback
 from typing import TYPE_CHECKING, Type
 
 import discord
 from discord.ext import commands
+# noinspection PyProtectedMember
+from discord.client import _ColourFormatter, stream_supports_colour
 
 from core.types.app_abc import ComponentABC
 
@@ -21,14 +24,31 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
         ComponentABC.__init__(self, app)
         self._raw_view_store = RawViewStore()
 
+        log_level = logging.DEBUG if app.config.Debug.DEBUG else logging.CRITICAL
+        self._my_logger = self.create_logger(log_level)
+
         intents = discord.Intents.default()
         intents.message_content = True
         commands.Bot.__init__(
             self,
+            log_level=log_level,
             command_prefix=self.command_prefix,
             help_command=None,
             intents=intents
         )
+
+    def create_logger(self, log_level):
+        logger = logging.getLogger("MyBot")
+        log_handler = logging.StreamHandler()
+        if isinstance(log_handler, logging.StreamHandler) and stream_supports_colour(log_handler.stream):
+            log_formatter = _ColourFormatter()
+        else:
+            dt_fmt = '%Y-%m-%d %H:%M:%S'
+            log_formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+        log_handler.setFormatter(log_formatter)
+        logger.setLevel(log_level)
+        logger.addHandler(log_handler)
+        return logger
 
     @staticmethod
     def command_prefix(bot: "MyBot", message: discord.Message):
@@ -47,8 +67,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             if self.app.config.Debug.SYNC_GLOBAL:
                 await self.tree.sync()
         await self.change_presence(activity=discord.Game("with bubbles"))
-        print(f"Logged in as {self.user} (ID: {self.user.id})")
-        print("------")
+        self._my_logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
 
     async def _sync_debug_guilds(self):
         for guild in map(discord.Object, self.app.config.Debug.guild):
@@ -60,9 +79,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             case UserInputWarning(message):
                 await ctx.send(message, reference=ctx.message, mention_author=False)
             case _:
-                if self.app.config.Debug.DEBUG:
-                    print(f'Ignoring exception in command {ctx.command}:', file=sys.stderr)
-                    traceback.print_exception(type(ex), ex, ex.__traceback__, file=sys.stderr)
+                self._my_logger.error("Ignoring exception in command %s", ctx.command, exc_info=ex)
 
     async def on_interaction(self, interaction: discord.Interaction):
         # Handle raw view
@@ -97,7 +114,5 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             case UserInputWarning(message):
                 await interaction.response.send_message(message, ephemeral=True)
             case _:
-                if self.app.config.Debug.DEBUG:
-                    print(f'Ignoring exception in raw view {view.__name__}:', file=sys.stderr)
-                    traceback.print_exception(ex.__class__, ex, ex.__traceback__, file=sys.stderr)
+                self._my_logger.error("Ignoring exception in raw view %s", view.__name__, exc_info=ex)
                 await interaction.response.defer()
