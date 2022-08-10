@@ -1,3 +1,3 @@
 dacite
 
-discord.py @ git+https://github.com/Rapptz/discord.py@9fe19dcc6923e4b6133bdedafb33658bf37c9ab7
+discord.py @ git+https://github.com/Rapptz/discord.py@0e386ec2ccfa6b131ab0ebd782d1ccd50bf08470
