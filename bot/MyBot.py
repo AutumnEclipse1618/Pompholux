@@ -25,7 +25,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
         self._raw_view_store = RawViewStore()
 
         log_level = logging.DEBUG if app.config.Debug.DEBUG else logging.CRITICAL
-        self._my_logger = self.create_logger(log_level)
+        self.my_logger = self.create_logger(log_level)
 
         intents = discord.Intents.default()
         intents.message_content = True
@@ -67,7 +67,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             if self.app.config.Debug.SYNC_GLOBAL:
                 await self.tree.sync()
         await self.change_presence(activity=discord.Game("with bubbles"))
-        self._my_logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
+        self.my_logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
 
     async def _sync_debug_guilds(self):
         for guild in map(discord.Object, self.app.config.Debug.guild):
@@ -79,7 +79,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             case UserInputWarning(message):
                 await ctx.send(message, reference=ctx.message, mention_author=False)
             case _:
-                self._my_logger.error("Ignoring exception in command %s", ctx.command, exc_info=ex)
+                self.my_logger.error("Ignoring exception in command %s", ctx.command, exc_info=ex)
 
     async def on_interaction(self, interaction: discord.Interaction):
         # Handle raw view
@@ -114,5 +114,5 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
             case UserInputWarning(message):
                 await interaction.response.send_message(message, ephemeral=True)
             case _:
-                self._my_logger.error("Ignoring exception in raw view %s", view.__name__, exc_info=ex)
+                self.my_logger.error("Ignoring exception in raw view %s", view.__name__, exc_info=ex)
                 await interaction.response.defer()
