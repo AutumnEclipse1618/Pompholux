@@ -534,10 +534,7 @@ async def edit_autorole(ctx: discord.Interaction, message: discord.Message):
             )(c.type, c.custom_id),
             components
     ) is None:
-        # raise UserInputWarning(":x: Must be on a valid autorole message")
-        # TODO command tree context menu error
-        await ctx.response.send_message(":x: Must be on a valid autorole message", ephemeral=True)
-        return
+        raise UserInputWarning(":x: Must be on a valid autorole message")
 
     type_ = \
         AutoroleType.Dropdown \

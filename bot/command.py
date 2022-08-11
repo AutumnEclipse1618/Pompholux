@@ -1,11 +1,29 @@
+import logging
 from types import MethodType
 from typing import TYPE_CHECKING, TypeVar, Any, Dict
 
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord.ext import commands
+
+from bot.error import UserInputWarning
 
 if TYPE_CHECKING:
     from .MyBot import MyBot
+
+
+class MyTree(app_commands.CommandTree["MyBot"]):
+    async def on_error(self, interaction: Interaction, ex: app_commands.AppCommandError) -> None:
+        match ex:
+            case app_commands.CommandInvokeError(original=UserInputWarning(message)):
+                await interaction.response.send_message(message, ephemeral=True)
+            case _:
+                await interaction.response.defer()
+                # noinspection PyTypeChecker
+                command: app_commands.Command | app_commands.ContextMenu | None = interaction.command
+                if command is not None and not command._has_any_error_handlers():
+                    logging.getLogger("MyBot").error('Ignoring exception in command %r', command.name, exc_info=ex)
+                elif command is None:
+                    logging.getLogger("MyBot").error('Ignoring exception in command tree', exc_info=ex)
 
 
 class MyCommand(commands.Command):

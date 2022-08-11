@@ -10,6 +10,7 @@ from discord.client import _ColourFormatter, stream_supports_colour
 
 from core.types.app_abc import ComponentABC
 
+from .command import MyTree
 from .RawView import RawViewStore, RawViewT
 from .error import UserInputWarning
 from .RawView import RawView
@@ -32,6 +33,7 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
         commands.Bot.__init__(
             self,
             log_level=log_level,
+            tree_cls=MyTree,
             command_prefix=self.command_prefix,
             help_command=None,
             intents=intents
