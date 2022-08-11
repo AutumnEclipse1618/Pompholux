@@ -1,4 +1,4 @@
-from typing import Callable, ParamSpec, Coroutine, Any
+from typing import Callable, ParamSpec, Coroutine, Any, TypeVar
 
 __all__ = [
     "tryint",
@@ -6,10 +6,13 @@ __all__ = [
     "predicate_and",
     "predicate_or_async",
     "predicate_and_async",
+    "pop_dict",
 ]
 
 
 P = ParamSpec('P')
+KT = TypeVar("KT")
+VT = TypeVar("VT")
 
 
 def tryint(s: str, *, base: int = 10, default: int | None = None):
@@ -38,3 +41,9 @@ def predicate_and_async(*predicates):
         return all(await pred(*args, **kwargs) for pred in predicates)
 
     return _lambda
+
+
+def pop_dict(dct: dict[KT, VT], *keys: KT) -> dict[KT, VT]:
+    for key in keys:
+        dct.pop(key)
+    return dct

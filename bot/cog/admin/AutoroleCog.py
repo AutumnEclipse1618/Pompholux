@@ -8,7 +8,7 @@ import discord
 
 from discord.ext import commands
 
-from core.util import make_escape, tryint, predicate_or
+from core.util import make_escape, tryint, predicate_or, pop_dict
 from bot.MyCog import MyCog
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
@@ -229,12 +229,12 @@ class AutoroleFormBase(MyModal, ABC):
         elif len(embeds) == 1:
             content_ = json.dumps({
                 **({"content": content} if content else {}),
-                "embed": message.embeds[0].to_dict(),
+                "embed": pop_dict(message.embeds[0].to_dict(), "type"),
             }, indent=4)
         else:
             content_ = json.dumps({
                 **({"content": content} if content else {}),
-                "embeds": [e.to_dict() for e in embeds],
+                "embeds": [pop_dict(e.to_dict(), "type") for e in embeds],
             }, indent=4)
 
         return content_
