@@ -2,7 +2,7 @@ import json
 import re
 import enum
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Pattern, Type, TypeVar
+from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Pattern, Type, TypeVar, Optional
 
 import discord
 
@@ -136,10 +136,11 @@ class AutoroleFormBase(MyModal, ABC):
     def view_type(self) -> AutoroleViewT:
         pass
 
-    @property
-    @abstractmethod
-    def content(self) -> discord.ui.TextInput:
-        pass
+    # Instance fields
+    __slots__ = ("prefill", "content", "roles")
+    prefillL: Optional[discord.Message]
+    content: discord.ui.TextInput
+    roles: discord.ui.TextInput
 
     @classmethod
     async def parse_content_input(cls, content: str) -> AutoroleMessageParams:
@@ -153,11 +154,6 @@ class AutoroleFormBase(MyModal, ABC):
             if "embeds" in dct:
                 dct["embeds"] = [discord.Embed.from_dict(e) for e in dct["embeds"]]
             return AutoroleMessageParams(**dct)
-
-    @property
-    @abstractmethod
-    def roles(self) -> discord.ui.TextInput:
-        pass
 
     @property
     @abstractmethod
@@ -217,8 +213,6 @@ class AutoroleFormBase(MyModal, ABC):
         except discord.HTTPException as ex:
             raise UserInputWarning(":x: An error occurred") from ex
 
-    prefill: discord.Message = None
-
     @classmethod
     def prefill_content_from_message(cls, message: discord.Message) -> str:
         content = message.content
@@ -248,19 +242,25 @@ class AutoroleFormBase(MyModal, ABC):
 class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
     view_type = AutoroleButtonsView
 
-    content = discord.ui.TextInput(
-        label="Message Content",
-        style=discord.TextStyle.long,
-        placeholder="Enter a string or JSON\n(See help page for JSON format)",
-        required=False,
-    )
+    def __init__(self, prefill: discord.Message = None, content: str = None, roles: str = None):
+        super().__init__()
+        self.prefill = prefill
+        self.content = discord.ui.TextInput(
+            label="Message Content",
+            style=discord.TextStyle.long,
+            placeholder="Enter a string or JSON\n(See help page for JSON format)",
+            required=False,
+            default=content,
+        )
+        self.roles = discord.ui.TextInput(
+                label="Roles",
+                style=discord.TextStyle.long,
+                placeholder="Put a role ID on each line\n(See help page for format)",
+                required=True,
+                default=roles,
+            )
+        self.add_item(self.content).add_item(self.roles)
 
-    roles = discord.ui.TextInput(
-        label="Roles",
-        style=discord.TextStyle.long,
-        placeholder="Put a role ID on each line\n(See help page for format)",
-        required=True,
-    )
     roles_regex = re.compile(
         r"""
             ^(?:
@@ -315,24 +315,6 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
 
         return abp
 
-    # noinspection PyPep8Naming
-    @classmethod
-    def prefill_class(cls, message: discord.Message, content: str, roles: str) -> "AutoroleButtonsForm":
-        content_payload = AutoroleButtonsForm.content.to_component_dict()
-        content_payload["value"] = content
-        content_ = discord.ui.TextInput.from_component(discord.components.TextInput(content_payload))
-
-        roles_payload = AutoroleButtonsForm.roles.to_component_dict()
-        roles_payload["value"] = roles
-        roles_ = discord.ui.TextInput.from_component(discord.components.TextInput(roles_payload))
-
-        class _Prefilled_AutoroleButtonsForm(cls):
-            prefill = message
-            content = content_
-            roles = roles_
-
-        return _Prefilled_AutoroleButtonsForm()
-
     @classmethod
     def prefill_from_message(cls, message: discord.Message) -> "AutoroleButtonsForm":
         content_ = cls.prefill_content_from_message(message)
@@ -346,25 +328,51 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             for c in components
         ])
 
-        return cls.prefill_class(message, content_, roles_)
+        return cls(message, content_, roles_)
 
 
 class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)"):
     view_type = AutoroleDropdownView
 
-    content = discord.ui.TextInput(
-        label="Message Content",
-        style=discord.TextStyle.long,
-        placeholder="Enter a string or JSON\n(See help page for JSON format)",
-        required=False,
-    )
+    def __init__(self, prefill: discord.Message = None, content: str = None, roles: str = None,
+                 _min: str = "1", _max: str = "1"
+                 ):
+        super().__init__()
+        self.prefill = prefill
+        self.content = discord.ui.TextInput(
+            label="Message Content",
+            style=discord.TextStyle.long,
+            placeholder="Enter a string or JSON\n(See help page for JSON format)",
+            required=False,
+            default=content,
+        )
+        self.roles = discord.ui.TextInput(
+            label="Roles",
+            style=discord.TextStyle.long,
+            placeholder="Put a role ID on each line\n(See help page for format)",
+            required=True,
+            default=roles,
+        )
+        self.min = discord.ui.TextInput(
+            label="Min",
+            style=discord.TextStyle.short,
+            placeholder="(min 0, max 25)",
+            required=True,
+            min_length=1,
+            max_length=2,
+            default="1",
+        )
+        self.max = discord.ui.TextInput(
+            label="Max",
+            style=discord.TextStyle.short,
+            placeholder="(min 0, max 25)",
+            required=True,
+            min_length=1,
+            max_length=2,
+            default="1",
+        )
+        self.add_item(self.content).add_item(self.roles).add_item(self.min).add_item(self.max)
 
-    roles = discord.ui.TextInput(
-        label="Roles",
-        style=discord.TextStyle.long,
-        placeholder="Put a role ID on each line\n(See help page for format)",
-        required=True,
-    )
     roles_regex = re.compile(
         r"""
             ^(?:
@@ -380,26 +388,6 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         """, re.ASCII | re.IGNORECASE | re.VERBOSE)
 
     DESC = "%DESC%"
-
-    min = discord.ui.TextInput(
-        label="Min",
-        style=discord.TextStyle.short,
-        placeholder="(min 0, max 25)",
-        required=True,
-        min_length=1,
-        max_length=2,
-        default="1",
-    )
-
-    max = discord.ui.TextInput(
-        label="Max",
-        style=discord.TextStyle.short,
-        placeholder="(min 0, max 25)",
-        required=True,
-        min_length=1,
-        max_length=2,
-        default="1",
-    )
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -452,38 +440,6 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             "max_values": max_values,
         }
 
-    # noinspection PyPep8Naming
-    @classmethod
-    def prefill_class(
-            cls,
-            message: discord.Message,
-            content: str, roles: str, min_: str, max_: str
-    ) -> "AutoroleDropdownForm":
-        content_payload = AutoroleDropdownForm.content.to_component_dict()
-        content_payload["value"] = content
-        content_ = discord.ui.TextInput.from_component(discord.components.TextInput(content_payload))
-
-        roles_payload = AutoroleDropdownForm.roles.to_component_dict()
-        roles_payload["value"] = roles
-        roles_ = discord.ui.TextInput.from_component(discord.components.TextInput(roles_payload))
-
-        min_payload = AutoroleDropdownForm.min.to_component_dict()
-        min_payload["value"] = min_
-        min_field = discord.ui.TextInput.from_component(discord.components.TextInput(min_payload))
-
-        max_payload = AutoroleDropdownForm.max.to_component_dict()
-        max_payload["value"] = max_
-        max_field = discord.ui.TextInput.from_component(discord.components.TextInput(max_payload))
-
-        class _Prefilled_AutoroleDropdownForm(cls):
-            prefill = message
-            content = content_
-            roles = roles_
-            min = min_field
-            max = max_field
-
-        return _Prefilled_AutoroleDropdownForm()
-
     @classmethod
     def prefill_from_message(cls, message: discord.Message) -> "AutoroleDropdownForm":
         content_ = cls.prefill_content_from_message(message)
@@ -504,7 +460,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         min_ = str(dropdown.min_values)
         max_ = str(dropdown.max_values)
 
-        return cls.prefill_class(message, content_, roles_, min_, max_)
+        return cls(message, content_, roles_, min_, max_)
 
 
 class AutoroleType(enum.Enum):
