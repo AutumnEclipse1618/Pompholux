@@ -26,20 +26,24 @@ def make_translation(translation: Dict[str, str]) -> Tuple[Callable[[str], str],
     return _trans_func(translation), _trans_func(inverse)
 
 
-def make_escape(chars: str) -> Tuple[Callable[[str], str], Callable[[str], str], Callable[[str], str]]:
+def make_escape(
+        chars: str = "",
+        escape: str = "\\"
+) -> Tuple[Callable[[str], str], Callable[[str], str], Callable[[str], str]]:
     """
     Create escape and unescape functions for specified characters
 
-    :param chars: List of characters to escape (backslash is already included)
+    :param chars: List of characters to escape (duplicate of escape character is automatically included)
+    :param escape: Escape character to use
     :return: Escape function and unescape function
     """
-    chars = "\\" + chars
+    chars = escape + chars
     escape_dict: Dict[str, str] = {}
     unescape_dict: Dict[str, str] = {}
     rev_escape_dict: Dict[str, str] = {}
     for i, c in enumerate(chars.__iter__()):
         esc = chr(ord('\uE000')+i)
-        escape_dict[rf'\{c}'] = esc
+        escape_dict[rf'{escape}{c}'] = esc
         unescape_dict[esc] = c
-        rev_escape_dict[c] = rf'\{c}'
+        rev_escape_dict[c] = rf'{escape}{c}'
     return _trans_func(escape_dict), _trans_func(unescape_dict), _trans_func(rev_escape_dict)

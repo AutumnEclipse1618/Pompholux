@@ -1,8 +1,9 @@
+import asyncio
 import json
 import re
 import enum
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Pattern, Type, TypeVar, Optional
+from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Type, TypeVar, Optional
 
 import discord
 
@@ -128,6 +129,7 @@ class AutoroleDropdownView(RawView):
 
 AutoroleViewT = TypeVar("AutoroleViewT", Type[AutoroleButtonsView], Type[AutoroleDropdownView])
 AutoroleFormT = TypeVar("AutoroleFormT", Type["AutoroleButtonsForm"], Type["AutoroleDropdownForm"])
+AutoroleParamsT = TypeVar("AutoroleParamsT", AutoroleButtonParams, AutoroleDropdownValueParams)
 
 
 class AutoroleFormBase(MyModal, ABC):
@@ -142,8 +144,9 @@ class AutoroleFormBase(MyModal, ABC):
     content: discord.ui.TextInput
     roles: discord.ui.TextInput
 
-    @classmethod
-    async def parse_content_input(cls, content: str) -> AutoroleMessageParams:
+    # noinspection PyUnusedLocal
+    async def parse_content_input(self, interaction: discord.Interaction) -> AutoroleMessageParams:
+        content = self.content.value
         if not content.startswith("{"):
             return AutoroleMessageParams(content=content)
         else:
@@ -155,18 +158,8 @@ class AutoroleFormBase(MyModal, ABC):
                 dct["embeds"] = [discord.Embed.from_dict(e) for e in dct["embeds"]]
             return AutoroleMessageParams(**dct)
 
-    @property
     @abstractmethod
-    def roles_regex(self) -> Pattern:
-        pass
-
-    @classmethod
-    @abstractmethod
-    async def parse_roles_input(
-            cls,
-            interaction: discord.Interaction,
-            **kwargs
-    ) -> AutoroleButtonParams | AutoroleDropdownValueParams:
+    async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleParamsT]:
         pass
 
     # noinspection PyUnusedLocal
@@ -174,35 +167,43 @@ class AutoroleFormBase(MyModal, ABC):
         return {}
 
     ROLENAME = "%ROLENAME%"
-    label_escape, label_unescape, label_rev_escape = make_escape("%")
-    label_rolename_replace = re.compile(ROLENAME, re.IGNORECASE)
+    _rolename_regex = re.compile(ROLENAME, re.IGNORECASE)
+    label_escape, label_unescape, label_rev_escape = map(staticmethod, make_escape(escape="%"))
+
+    @classmethod
+    def label_rolename_replace(cls, repl: str, string: str):
+        return cls._rolename_regex.sub(repl, string)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
+
         try:
-            content_ = await self.parse_content_input(self.content.value)
+            content = await self.parse_content_input(interaction)
+        except UserInputWarning:
+            raise
         except Exception as ex:
             raise UserInputWarning(":x: Error parsing \"Content\" input") from ex
 
-        if self.roles_regex.fullmatch(self.roles.value) is None:
-            raise UserInputWarning(":x: Invalid \"Roles\" input")
-        roles = [
-            await self.parse_roles_input(interaction, **m.groupdict())
-            for m in map(self.roles_regex.fullmatch, self.roles.value.split("\n")) if m is not None
-        ]
+        try:
+            roles = await self.parse_roles_input(interaction)
+        except UserInputWarning:
+            raise
+        except Exception as ex:
+            raise UserInputWarning(":x: Error parsing \"Roles\" input") from ex
+
         if len(roles) > 25:
             raise UserInputWarning(":x: Maximum is 25 roles")
 
         try:
             if not self.prefill:
                 await interaction.followup.send(
-                    **content_,
+                    **content,
                     view=self.view_type(roles, **(await self.parse_fields(interaction))),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
             else:
                 await self.prefill.edit(
-                    **content_,
+                    **content,
                     view=self.view_type(roles, **(await self.parse_fields(interaction))),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
@@ -224,12 +225,12 @@ class AutoroleFormBase(MyModal, ABC):
             content_ = json.dumps({
                 **({"content": content} if content else {}),
                 "embed": pop_dict(message.embeds[0].to_dict(), "type"),
-            }, indent=4)
+            }, ensure_ascii=False, indent=4)
         else:
             content_ = json.dumps({
                 **({"content": content} if content else {}),
                 "embeds": [pop_dict(e.to_dict(), "type") for e in embeds],
-            }, indent=4)
+            }, ensure_ascii=False, indent=4)
 
         return content_
 
@@ -261,22 +262,6 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             )
         self.add_item(self.content).add_item(self.roles)
 
-    roles_regex = re.compile(
-        r"""
-            ^(?:
-                (?P<role>\d{15,20})
-                (?:[ ]
-                    (?P<style>[\w\.]+)?
-                    (?:\:(?P<emoji>[^\s\:]+)\:)?
-                    (?<![ ])
-                    (?:[ ]
-                        (?P<label>.+)
-                    )?
-                )?
-                (?:\n+|$)
-            )+
-        """, re.ASCII | re.IGNORECASE | re.VERBOSE)
-
     button_styles: Dict[str | None, discord.enums.ButtonStyle] = {
         **dict.fromkeys(("primary", "blurple", "blue", "purple"), discord.enums.ButtonStyle.primary),
         **dict.fromkeys(("secondary", "grey", "gray", None, "."), discord.enums.ButtonStyle.secondary),
@@ -284,13 +269,20 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         **dict.fromkeys(("danger", "red"), discord.enums.ButtonStyle.danger),
     }
 
-    # noinspection PyMethodOverriding
-    @classmethod
-    async def parse_roles_input(
-        cls,
-        interaction: discord.Interaction,
-        role: str, style: str | None, emoji: str | None, label: str | None, **kwargs
+    async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleButtonParams]:
+        lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+        return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
+
+    async def _parse_role_input(
+            self,
+            interaction: discord.Interaction,
+            *,
+            role: str = None, style: Optional[str] = None, emoji: Optional[str] = None, label: Optional[str] = None,
+            **_kwargs
     ) -> AutoroleButtonParams:
+        if role is None:
+            raise UserInputWarning(":x: Role must be specified")
+
         abp = AutoroleButtonParams()
 
         if (role_ := interaction.guild.get_role(int(role))) is None:
@@ -298,11 +290,11 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         abp["role"] = role_
 
         try:
-            abp["style"] = cls.button_styles[style]
+            abp["style"] = self.button_styles[style]
         except KeyError as ex:
             raise UserInputWarning(f':x: Unknown button style "{style}"') from ex
 
-        if emoji is not None:
+        if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
                      or discord.utils.get(interaction.guild.emojis, id=emoji) \
                      or interaction.client.app.emoji.get(emoji)
@@ -310,8 +302,8 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
                 raise UserInputWarning(":x: Invalid emoji")
             abp["emoji"] = emoji_
 
-        if (label_ := label if label is not None else (cls.ROLENAME if emoji is None else None)) is not None:
-            abp["label"] = cls.label_unescape(cls.label_rolename_replace.sub(role_.name, cls.label_escape(label_)))
+        if (label_ := label or (self.ROLENAME if emoji is None else None)) is not None:
+            abp["label"] = self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(label_)))
 
         return abp
 
@@ -320,13 +312,18 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         content_ = cls.prefill_content_from_message(message)
 
         components: List[discord.Button] = walk_components(message)
+
         # noinspection PyUnresolvedReferences
-        roles_ = "\n".join([
-            f"{AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1]}"
-            f" {c.style.name}{f':{c.emoji.id or c.emoji.name}:' if c.emoji is not None else ''}"
-            f"{f' {cls.label_rev_escape(c.label)}' if c.label else ''}"
+        roles = [
+            {
+                "role": AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1],
+                "style": c.style.name,
+                **({"emoji": c.emoji.id or c.emoji.name} if c.emoji else {}),
+                **({"label": cls.label_rev_escape(c.label)} if c.label else {})
+            }
             for c in components
-        ])
+        ]
+        roles_ = json.dumps(roles, ensure_ascii=False, indent=4)
 
         return cls(message, content_, roles_)
 
@@ -373,36 +370,28 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         )
         self.add_item(self.content).add_item(self.roles).add_item(self.min).add_item(self.max)
 
-    roles_regex = re.compile(
-        r"""
-            ^(?:
-                (?P<role>\d{15,20})
-                (?:[ ]
-                    (?:\:(?P<emoji>[^\s\:]+)\:|\.)
-                    (?:[ ]
-                        (?P<label>.+)
-                    )?
-                )?
-                (?:\n+|$)
-            )+
-        """, re.ASCII | re.IGNORECASE | re.VERBOSE)
+    async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleDropdownValueParams]:
+        lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+        return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
 
-    DESC = "%DESC%"
-
-    # noinspection PyMethodOverriding
-    @classmethod
-    async def parse_roles_input(
-        cls,
-        interaction: discord.Interaction,
-        role: str, emoji: str | None, label: str | None, **kwargs
+    async def _parse_role_input(
+            self,
+            interaction: discord.Interaction,
+            *,
+            role: str = None,
+            emoji: Optional[str] = None, label: Optional[str] = None, description: Optional[str] = None,
+            **_kwargs
     ) -> AutoroleDropdownValueParams:
+        if role is None:
+            raise UserInputWarning(":x: Role must be specified")
+
         abp = AutoroleDropdownValueParams()
 
         if (role_ := interaction.guild.get_role(int(role))) is None:
             raise UserInputWarning(f':x: Unknown role "{role}"')
         abp["role"] = role_
 
-        if emoji is not None:
+        if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
                      or discord.utils.get(interaction.guild.emojis, id=emoji) \
                      or interaction.client.app.emoji.get(emoji)
@@ -410,17 +399,12 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
                 raise UserInputWarning(":x: Invalid emoji")
             abp["emoji"] = emoji_
 
-        if label is not None:
-            label_, description, *_ = (*cls.label_escape(label).split(cls.DESC, 1), None)
-            if label_ == "":
-                label_ = cls.ROLENAME
-        else:
-            label_ = cls.ROLENAME
-            description = None
+        label_ = label or self.ROLENAME
+        abp["label"] = self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(label_)))
 
-        abp["label"] = cls.label_unescape(cls.label_rolename_replace.sub(role_.name, label_))
-        if description is not None:
-            abp["description"] = cls.label_unescape(cls.label_rolename_replace.sub(role_.name, description))
+        if description:
+            abp["description"] = \
+                self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(description)))
 
         return abp
 
@@ -449,13 +433,16 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             type=discord.ComponentType.select
         )
 
-        roles_ = "\n".join([
-            f"{AutoroleDropdownView.value_regex.fullmatch(o.value)[1]}"
-            f" {f':{o.emoji.id or o.emoji.name}:' if o.emoji is not None else '.'}"
-            f" {cls.label_rev_escape(o.label)}"
-            f"{f'{AutoroleDropdownForm.DESC}{cls.label_rev_escape(o.description)}' if o.description else ''}"
+        roles = [
+            {
+                "role": AutoroleDropdownView.value_regex.fullmatch(o.value)[1],
+                "label": cls.label_rev_escape(o.label),
+                **({"emoji": o.emoji.id or o.emoji.name} if o.emoji else {}),
+                **({"description": cls.label_rev_escape(o.description)} if o.description else {})
+            }
             for o in dropdown.options
-        ])
+        ]
+        roles_ = json.dumps(roles, ensure_ascii=False, indent=4)
 
         min_ = str(dropdown.min_values)
         max_ = str(dropdown.max_values)
@@ -492,9 +479,10 @@ async def edit_autorole(ctx: discord.Interaction, message: discord.Message):
     ) is None:
         raise UserInputWarning(":x: Must be on a valid autorole message")
 
-    type_ = \
-        AutoroleType.Dropdown \
-        if discord.utils.get(components, type=discord.enums.ComponentType.select) is not None \
+    autorole_form_cls = (
+        AutoroleType.Dropdown
+        if discord.utils.get(components, type=discord.enums.ComponentType.select) is not None
         else AutoroleType.Buttons
-    await ctx.response.send_modal(type_.value.prefill_from_message(message))
+    ).value
+    await ctx.response.send_modal(autorole_form_cls.prefill_from_message(message))
 edit_autorole: discord.app_commands.ContextMenu
