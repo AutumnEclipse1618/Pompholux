@@ -10,11 +10,11 @@ import discord
 from discord.ext import commands
 
 from core.util import make_escape, tryint, predicate_or, pop_dict
+from core.util.discord import walk_components
 from bot.MyCog import MyCog
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
 from bot.RawView import RawView
-from core.util.discord import walk_components
 
 if TYPE_CHECKING:
     import discord.types.interactions
@@ -181,6 +181,8 @@ class AutoroleFormBase(MyModal, ABC):
             content = await self.parse_content_input(interaction)
         except UserInputWarning:
             raise
+        except json.JSONDecodeError as ex:
+            raise UserInputWarning(f":x: Error parsing \"Content\" JSON\n```{ex}```") from ex
         except Exception as ex:
             raise UserInputWarning(":x: Error parsing \"Content\" input") from ex
 
@@ -188,6 +190,8 @@ class AutoroleFormBase(MyModal, ABC):
             roles = await self.parse_roles_input(interaction)
         except UserInputWarning:
             raise
+        except json.JSONDecodeError as ex:
+            raise UserInputWarning(f":x: Error parsing \"Roles\" JSON\n```{ex}```") from ex
         except Exception as ex:
             raise UserInputWarning(":x: Error parsing \"Roles\" input") from ex
 
