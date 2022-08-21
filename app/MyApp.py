@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 class MyApp(AppABC):
     config: "Config"
     emoji: Dict[str, str]
+    emoji_rev: Dict[str, str]
     bot: "MyBot"
 
     def run(self):

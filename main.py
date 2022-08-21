@@ -15,7 +15,7 @@ if __name__ == "__main__":
     app = MyApp()
 
     app.config = ConfigReader.read_config(Config, *config_files)
-    app.emoji = EmojiReader.read_emoji(emoji_file)
+    app.emoji, app.emoji_rev = EmojiReader.read_emoji(emoji_file)
     app.bot = app.create_component(MyBot)
 
     app.run()

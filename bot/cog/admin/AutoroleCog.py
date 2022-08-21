@@ -276,7 +276,7 @@ class AutoroleFormBase(MyModal, ABC):
 
     @classmethod
     @abstractmethod
-    def prefill_from_message(cls, message: discord.Message) -> AutoroleFormT:
+    def prefill_from_message(cls, interaction: discord.Interaction, message: discord.Message) -> AutoroleFormT:
         pass
 
 
@@ -382,7 +382,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         return abp
 
     @classmethod
-    def prefill_from_message(cls, message: discord.Message) -> "AutoroleButtonsForm":
+    def prefill_from_message(cls, interaction: discord.Interaction, message: discord.Message) -> "AutoroleButtonsForm":
         content_ = cls.prefill_content_from_message(message)
 
         components: List[discord.Button] = walk_components(message)
@@ -392,7 +392,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             {
                 "role": int(AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1]),
                 "style": c.style.name,
-                **({"emoji": c.emoji.name} if c.emoji else {}),
+                **({"emoji": interaction.client.app.emoji_rev.get(c.emoji.name) or c.emoji.name} if c.emoji else {}),
                 **({"label": cls.label_rev_escape(c.label)} if c.label else {})
             }
             for c in components
@@ -535,7 +535,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         }
 
     @classmethod
-    def prefill_from_message(cls, message: discord.Message) -> "AutoroleDropdownForm":
+    def prefill_from_message(cls, interaction: discord.Interaction, message: discord.Message) -> "AutoroleDropdownForm":
         content_ = cls.prefill_content_from_message(message)
 
         dropdown = discord.utils.get(
@@ -547,7 +547,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             {
                 "role": int(AutoroleDropdownView.value_regex.fullmatch(o.value)[1]),
                 "label": cls.label_rev_escape(o.label),
-                **({"emoji": o.emoji.name} if o.emoji else {}),
+                **({"emoji": interaction.client.app.emoji_rev.get(o.emoji.name) or o.emoji.name} if o.emoji else {}),
                 **({"description": cls.label_rev_escape(o.description)} if o.description else {})
             }
             for o in dropdown.options
@@ -594,5 +594,5 @@ async def edit_autorole(ctx: discord.Interaction, message: discord.Message):
         if discord.utils.get(components, type=discord.enums.ComponentType.select) is not None
         else AutoroleType.Buttons
     ).value
-    await ctx.response.send_modal(autorole_form_cls.prefill_from_message(message))
+    await ctx.response.send_modal(autorole_form_cls.prefill_from_message(ctx, message))
 edit_autorole: discord.app_commands.ContextMenu
