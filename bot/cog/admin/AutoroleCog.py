@@ -181,18 +181,19 @@ class AutoroleFormBase(MyModal, ABC):
                     case jsonschema.ValidationError(
                         json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
                     ):
-                        message = f"Maximum length is {_max}"
-                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                        raise self._validation_error(field="Content", path=json_path,
+                                                     message=f"Maximum length is {_max}") from ex
                     case jsonschema.ValidationError(
                         json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
                     ) if _min == 1:
-                        message = f"Value cannot be empty"
-                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                        raise self._validation_error(field="Content", path=json_path,
+                                                     message="Value cannot be empty") from ex
                     case jsonschema.ValidationError(
                         json_path=json_path, validator="not", validator_value={"$anchor": "notEmbeds"}
                     ):
-                        message = "Cannot have both \"embed\" and \"embeds\" properties"
-                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                        raise self._validation_error(field="Content", path=json_path,
+                                                     message="Cannot have both \"embed\" and \"embeds\" properties"
+                                                     ) from ex
                     case jsonschema.ValidationError(json_path=json_path, message=message):
                         raise self._validation_error(field="Content", path=json_path, message=message) from ex
                     case _:
@@ -295,47 +296,81 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         self.roles = discord.ui.TextInput(
                 label="Roles",
                 style=discord.TextStyle.long,
-                placeholder="Put a role ID on each line\n(See help page for format)",
+                placeholder="Enter a JSON\n(See help page for format)",
                 required=True,
                 default=roles,
             )
         self.add_item(self.content).add_item(self.roles)
 
-    button_styles: Dict[str | None, discord.enums.ButtonStyle] = {
+    button_styles: Dict[str, discord.enums.ButtonStyle] = {
         **dict.fromkeys(("primary", "blurple", "blue", "purple"), discord.enums.ButtonStyle.primary),
-        **dict.fromkeys(("secondary", "grey", "gray", None, "."), discord.enums.ButtonStyle.secondary),
+        **dict.fromkeys(("secondary", "grey", "gray"), discord.enums.ButtonStyle.secondary),
         **dict.fromkeys(("success", "green"), discord.enums.ButtonStyle.success),
         **dict.fromkeys(("danger", "red"), discord.enums.ButtonStyle.danger),
     }
+    roles_validator = jsonschema.validators.extend(
+        # Use Draft 4 type checkers so that numbers ending in .0 count as invalid ints
+        jsonschema.Draft202012Validator, type_checker=jsonschema.Draft4Validator.TYPE_CHECKER
+    )({
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 25,
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "role": { "type": "integer", "minimum": 0 },
+                "style": { "enum": list(button_styles.keys()) },
+                "emoji": { "type": "string", "minLength": 1 },
+                "label": { "type": "string", "minLength": 1 },
+            },
+            "required": ["role"],
+        },
+    })
 
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleButtonParams]:
-        lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+        try:
+            lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+            self.roles_validator.validate(lst)
+        except Exception as ex:
+            match ex:
+                case json.JSONDecodeError():
+                    raise UserInputWarning(f":x: \"Roles\" input is not valid JSON\n```\n{ex}```") from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
+                ):
+                    raise self._validation_error(field="Roles", path=json_path,
+                                                 message=f"Maximum length is {_max}") from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
+                ) if _min == 1:
+                    raise self._validation_error(field="Roles", path=json_path,
+                                                 message="Value cannot be empty") from ex
+                case jsonschema.ValidationError(json_path=json_path, message=message):
+                    raise self._validation_error(field="Roles", path=json_path, message=message) from ex
+                case _:
+                    raise ex
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
 
     async def _parse_role_input(
             self,
             interaction: discord.Interaction,
             *,
-            role: str = None, style: Optional[str] = None, emoji: Optional[str] = None, label: Optional[str] = None,
+            role: int,
+            style: Optional[str] = None, emoji: Optional[str] = None, label: Optional[str] = None,
             **_kwargs
     ) -> AutoroleButtonParams:
-        if role is None:
-            raise UserInputWarning(":x: Role must be specified")
-
         abp = AutoroleButtonParams()
 
-        if (role_ := interaction.guild.get_role(int(role))) is None:
+        if (role_ := interaction.guild.get_role(role)) is None:
             raise UserInputWarning(f':x: Unknown role "{role}"')
         abp["role"] = role_
 
-        try:
+        if style:
             abp["style"] = self.button_styles[style]
-        except KeyError as ex:
-            raise UserInputWarning(f':x: Unknown button style "{style}"') from ex
 
         if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
-                     or discord.utils.get(interaction.guild.emojis, id=emoji) \
                      or interaction.client.app.emoji.get(emoji)
             if emoji_ is None:
                 raise UserInputWarning(":x: Invalid emoji")
@@ -355,9 +390,9 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         # noinspection PyUnresolvedReferences
         roles = [
             {
-                "role": AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1],
+                "role": int(AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1]),
                 "style": c.style.name,
-                **({"emoji": c.emoji.id or c.emoji.name} if c.emoji else {}),
+                **({"emoji": c.emoji.name} if c.emoji else {}),
                 **({"label": cls.label_rev_escape(c.label)} if c.label else {})
             }
             for c in components
@@ -409,30 +444,66 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         )
         self.add_item(self.content).add_item(self.roles).add_item(self.min).add_item(self.max)
 
+    roles_validator = jsonschema.validators.extend(
+        # Use Draft 4 type checkers so that numbers ending in .0 count as invalid ints
+        jsonschema.Draft202012Validator, type_checker=jsonschema.Draft4Validator.TYPE_CHECKER
+    )({
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 25,
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "role": {"type": "integer", "minimum": 0},
+                "emoji": {"type": "string", "minLength": 1},
+                "label": {"type": "string", "minLength": 1},
+                "description": {"type": "string", "minLength": 1},
+            },
+            "required": ["role"],
+        },
+    })
+
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleDropdownValueParams]:
-        lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+        try:
+            lst: List[Dict[str, Any]] = json.loads(self.roles.value)
+            self.roles_validator.validate(lst)
+        except Exception as ex:
+            match ex:
+                case json.JSONDecodeError():
+                    raise UserInputWarning(f":x: \"Roles\" input is not valid JSON\n```\n{ex}```") from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
+                ):
+                    raise self._validation_error(field="Roles", path=json_path,
+                                                 message=f"Maximum length is {_max}") from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
+                ) if _min == 1:
+                    raise self._validation_error(field="Roles", path=json_path,
+                                                 message="Value cannot be empty") from ex
+                case jsonschema.ValidationError(json_path=json_path, message=message):
+                    raise self._validation_error(field="Roles", path=json_path, message=message) from ex
+                case _:
+                    raise ex
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
 
     async def _parse_role_input(
             self,
             interaction: discord.Interaction,
             *,
-            role: str = None,
+            role: int,
             emoji: Optional[str] = None, label: Optional[str] = None, description: Optional[str] = None,
             **_kwargs
     ) -> AutoroleDropdownValueParams:
-        if role is None:
-            raise UserInputWarning(":x: Role must be specified")
-
         abp = AutoroleDropdownValueParams()
 
-        if (role_ := interaction.guild.get_role(int(role))) is None:
+        if (role_ := interaction.guild.get_role(role)) is None:
             raise UserInputWarning(f':x: Unknown role "{role}"')
         abp["role"] = role_
 
         if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
-                     or discord.utils.get(interaction.guild.emojis, id=emoji) \
                      or interaction.client.app.emoji.get(emoji)
             if emoji_ is None:
                 raise UserInputWarning(":x: Invalid emoji")
@@ -474,9 +545,9 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
 
         roles = [
             {
-                "role": AutoroleDropdownView.value_regex.fullmatch(o.value)[1],
+                "role": int(AutoroleDropdownView.value_regex.fullmatch(o.value)[1]),
                 "label": cls.label_rev_escape(o.label),
-                **({"emoji": o.emoji.id or o.emoji.name} if o.emoji else {}),
+                **({"emoji": o.emoji.name} if o.emoji else {}),
                 **({"description": cls.label_rev_escape(o.description)} if o.description else {})
             }
             for o in dropdown.options
