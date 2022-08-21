@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Type, TypeVar, Optional
 
 import discord
+import jsonschema
 
 from discord.ext import commands
 
@@ -144,14 +145,58 @@ class AutoroleFormBase(MyModal, ABC):
     content: discord.ui.TextInput
     roles: discord.ui.TextInput
 
+    content_validator = jsonschema.Draft202012Validator({
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": False,
+        "properties": {
+            "content": { "type": "string", "minLength": 1 },
+            "embed": { "$anchor": "embed", "type": "object", "minProperties": 1 },
+            "embeds": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "$ref": "#embed" } },
+        },
+        "not": { "$anchor": "notEmbeds", "required": ["embed", "embeds"] },  # Not have both "embed" and "embeds"
+    })
+    VALIDATOR_ERR_MSG = \
+        ":x: \"{field}\" JSON does not conform to schema\n" \
+        "```\nError at element {path}\n" \
+        "{message}```"
+
+    @classmethod
+    def _validation_error(cls, *args, **kwargs):
+        return UserInputWarning(cls.VALIDATOR_ERR_MSG.format(*args, **kwargs))
+
     # noinspection PyUnusedLocal
     async def parse_content_input(self, interaction: discord.Interaction) -> AutoroleMessageParams:
         content = self.content.value
         if not content.startswith("{"):
             return AutoroleMessageParams(content=content)
         else:
-            dct: Dict[str, Any] = json.loads(content)
-            dct = {k: v for k, v in dct.items() if k in ("content", "embed", "embeds")}
+            try:
+                dct: Dict[str, Any] = json.loads(content)
+                self.content_validator.validate(dct)
+            except Exception as ex:
+                match ex:
+                    case json.JSONDecodeError():
+                        raise UserInputWarning(f":x: \"Content\" input is not valid JSON\n```\n{ex}```") from ex
+                    case jsonschema.ValidationError(
+                        json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
+                    ):
+                        message = f"Maximum length is {_max}"
+                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                    case jsonschema.ValidationError(
+                        json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
+                    ) if _min == 1:
+                        message = f"Value cannot be empty"
+                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                    case jsonschema.ValidationError(
+                        json_path=json_path, validator="not", validator_value={"$anchor": "notEmbeds"}
+                    ):
+                        message = "Cannot have both \"embed\" and \"embeds\" properties"
+                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                    case jsonschema.ValidationError(json_path=json_path, message=message):
+                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
+                    case _:
+                        raise ex
             if "embed" in dct:
                 dct["embed"] = discord.Embed.from_dict(dct["embed"])
             if "embeds" in dct:
@@ -181,17 +226,11 @@ class AutoroleFormBase(MyModal, ABC):
             content = await self.parse_content_input(interaction)
         except UserInputWarning:
             raise
-        except json.JSONDecodeError as ex:
-            raise UserInputWarning(f":x: Error parsing \"Content\" JSON\n```{ex}```") from ex
-        except Exception as ex:
-            raise UserInputWarning(":x: Error parsing \"Content\" input") from ex
 
         try:
             roles = await self.parse_roles_input(interaction)
         except UserInputWarning:
             raise
-        except json.JSONDecodeError as ex:
-            raise UserInputWarning(f":x: Error parsing \"Roles\" JSON\n```{ex}```") from ex
         except Exception as ex:
             raise UserInputWarning(":x: Error parsing \"Roles\" input") from ex
 
@@ -211,12 +250,8 @@ class AutoroleFormBase(MyModal, ABC):
                     view=self.view_type(roles, **(await self.parse_fields(interaction))),
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-        except TypeError as ex:
-            raise UserInputWarning(":x: Cannot mix \"embed\" and \"embeds\" keys") from ex
-        except ValueError as ex:
-            raise UserInputWarning(":x: \"embeds\" has a maximum of 10 elements") from ex
         except discord.HTTPException as ex:
-            raise UserInputWarning(":x: An error occurred") from ex
+            raise UserInputWarning(":x: Message could not be sent") from ex
 
     @classmethod
     def prefill_content_from_message(cls, message: discord.Message) -> str:

@@ -1,3 +1,4 @@
 dacite
+jsonschema
 
 discord.py @ git+https://github.com/Rapptz/discord.py@0e386ec2ccfa6b131ab0ebd782d1ccd50bf08470
