@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Type
 import discord
 from discord.ext import commands
 # noinspection PyProtectedMember
-from discord.client import _ColourFormatter, stream_supports_colour
+from discord.utils import _ColourFormatter, stream_supports_colour
 
 from core.types.app_abc import ComponentABC
 
