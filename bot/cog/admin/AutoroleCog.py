@@ -259,20 +259,13 @@ class AutoroleFormBase(MyModal, ABC):
         content = message.content
         embeds = message.embeds
 
-        if len(embeds) == 0:
-            content_ = content or ""
-        elif len(embeds) == 1:
-            content_ = json.dumps({
-                **({"content": content} if content else {}),
-                "embed": pop_dict(message.embeds[0].to_dict(), "type"),
-            }, ensure_ascii=False, indent=4)
-        else:
-            content_ = json.dumps({
-                **({"content": content} if content else {}),
-                "embeds": [pop_dict(e.to_dict(), "type") for e in embeds],
-            }, ensure_ascii=False, indent=4)
-
-        return content_
+        if len(embeds) == 0 and not content.startswith("{"):
+            return content or ""
+        return json.dumps({
+            **({"content": content} if content else {}),
+            **({"embed": pop_dict(message.embeds[0].to_dict(), "type")} if len(embeds) == 1 else {}),
+            **({"embeds": [pop_dict(e.to_dict(), "type") for e in embeds]} if len(embeds) > 1 else {}),
+        }, ensure_ascii=False, indent=4)
 
     @classmethod
     @abstractmethod
@@ -304,7 +297,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
 
     button_styles: Dict[str, discord.enums.ButtonStyle] = {
         **dict.fromkeys(("primary", "blurple", "blue", "purple"), discord.enums.ButtonStyle.primary),
-        **dict.fromkeys(("secondary", "grey", "gray"), discord.enums.ButtonStyle.secondary),
+        **dict.fromkeys(("secondary", "gray", "grey"), discord.enums.ButtonStyle.secondary),
         **dict.fromkeys(("success", "green"), discord.enums.ButtonStyle.success),
         **dict.fromkeys(("danger", "red"), discord.enums.ButtonStyle.danger),
     }
@@ -367,7 +360,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         abp["role"] = role_
 
         if style:
-            abp["style"] = self.button_styles[style]
+            abp["style"] = self.button_styles[style.lower()]
 
         if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
