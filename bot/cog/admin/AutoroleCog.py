@@ -280,7 +280,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         super().__init__()
         self.prefill = prefill
         self.content = discord.ui.TextInput(
-            label="Message Content",
+            label="Content",
             style=discord.TextStyle.long,
             placeholder="Enter a string or JSON\n(See help page for JSON format)",
             required=False,
@@ -404,7 +404,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         super().__init__()
         self.prefill = prefill
         self.content = discord.ui.TextInput(
-            label="Message Content",
+            label="Content",
             style=discord.TextStyle.long,
             placeholder="Enter a string or JSON\n(See help page for JSON format)",
             required=False,
