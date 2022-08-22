@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
 class AutoroleMessageParams(TypedDict, total=False):
     content: str
-    embed: discord.Embed
     embeds: List[discord.Embed]
 
 
@@ -169,7 +168,7 @@ class AutoroleFormBase(MyModal, ABC):
     async def parse_content_input(self, interaction: discord.Interaction) -> AutoroleMessageParams:
         content = self.content.value
         if not content.startswith("{"):
-            return AutoroleMessageParams(content=content)
+            return AutoroleMessageParams(content=content, embeds=[])
         else:
             try:
                 dct: Dict[str, Any] = json.loads(content)
@@ -199,10 +198,11 @@ class AutoroleFormBase(MyModal, ABC):
                     case _:
                         raise ex
             if "embed" in dct:
-                dct["embed"] = discord.Embed.from_dict(dct["embed"])
-            if "embeds" in dct:
-                dct["embeds"] = [discord.Embed.from_dict(e) for e in dct["embeds"]]
-            return AutoroleMessageParams(**dct)
+                dct["embeds"] = [dct["embed"]]
+            return AutoroleMessageParams(
+                content=dct["content"] if "content" in dct else "",
+                embeds=[discord.Embed.from_dict(e) for e in dct["embeds"]] if "embeds" in dct else []
+            )
 
     @abstractmethod
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleParamsT]:
