@@ -14,4 +14,4 @@ class MyApp(AppABC):
     bot: "MyBot"
 
     def run(self):
-        self.bot.run(self.config.Discord.token)
+        self.bot.run(self.config.Discord.token, log_handler=None)

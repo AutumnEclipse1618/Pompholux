@@ -25,32 +25,17 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
         ComponentABC.__init__(self, app)
         self._raw_view_store = RawViewStore()
 
-        log_level = logging.DEBUG if app.config.Debug.DEBUG else logging.CRITICAL
-        self.my_logger = self.create_logger(log_level)
+        self.my_logger = logging.getLogger("MyBot")
 
         intents = discord.Intents.default()
         intents.message_content = True
         commands.Bot.__init__(
             self,
-            log_level=log_level,
             tree_cls=MyTree,
             command_prefix=self.command_prefix,
             help_command=None,
             intents=intents
         )
-
-    def create_logger(self, log_level):
-        logger = logging.getLogger("MyBot")
-        log_handler = logging.StreamHandler()
-        if isinstance(log_handler, logging.StreamHandler) and stream_supports_colour(log_handler.stream):
-            log_formatter = _ColourFormatter()
-        else:
-            dt_fmt = '%Y-%m-%d %H:%M:%S'
-            log_formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
-        log_handler.setFormatter(log_formatter)
-        logger.setLevel(log_level)
-        logger.addHandler(log_handler)
-        return logger
 
     @staticmethod
     def command_prefix(bot: "MyBot", message: discord.Message):
