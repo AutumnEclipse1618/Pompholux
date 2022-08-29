@@ -1,14 +1,10 @@
 import logging
-import sys
-import traceback
 from typing import TYPE_CHECKING, Type
 
 import discord
 from discord.ext import commands
-# noinspection PyProtectedMember
-from discord.utils import _ColourFormatter, stream_supports_colour
 
-from core.types.app_abc import ComponentABC
+from app import app
 
 from .command import MyTree
 from .RawView import RawViewStore, RawViewT
@@ -17,12 +13,10 @@ from .RawView import RawView
 
 if TYPE_CHECKING:
     import discord.types.interactions
-    from app.MyApp import MyApp
 
 
-class MyBot(ComponentABC["MyApp"], commands.Bot):
-    def __init__(self, app: "MyApp"):
-        ComponentABC.__init__(self, app)
+class MyBot(commands.Bot):
+    def __init__(self):
         self._raw_view_store = RawViewStore()
 
         self.my_logger = logging.getLogger("MyBot")
@@ -48,16 +42,16 @@ class MyBot(ComponentABC["MyApp"], commands.Bot):
         await self.load_extension("bot.cog")
 
     async def on_ready(self):
-        if self.app.config.Discord.SYNC_COMMANDS:
-            if self.app.config.Debug.SYNC_GUILDS:
+        if app.config.Discord.SYNC_COMMANDS:
+            if app.config.Debug.SYNC_GUILDS:
                 await self._sync_debug_guilds()
-            if self.app.config.Debug.SYNC_GLOBAL:
+            if app.config.Debug.SYNC_GLOBAL:
                 await self.tree.sync()
         await self.change_presence(activity=discord.Game("with bubbles"))
         self.my_logger.info(f"Logged in as {self.user} (ID: {self.user.id})")
 
     async def _sync_debug_guilds(self):
-        for guild in map(discord.Object, self.app.config.Debug.guild):
+        for guild in map(discord.Object, app.config.Debug.guild):
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
 

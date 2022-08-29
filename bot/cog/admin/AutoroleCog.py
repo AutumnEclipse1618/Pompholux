@@ -3,24 +3,19 @@ import json
 import re
 import enum
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, TypedDict, Dict, Any, Type, TypeVar, Optional
+from typing import List, TypedDict, Dict, Any, Type, TypeVar, Optional
 
 import discord
 import jsonschema
 
 from discord.ext import commands
 
+from app import app
 from core.util import make_escape, tryint, predicate_or, pop_dict
 from core.util.discord import walk_components
-from bot.MyCog import MyCog
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
 from bot.RawView import RawView
-
-if TYPE_CHECKING:
-    import discord.types.interactions
-    # noinspection PyUnresolvedReferences
-    from ...MyBot import MyBot
 
 
 class AutoroleMessageParams(TypedDict, total=False):
@@ -364,7 +359,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
 
         if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
-                     or interaction.client.app.emoji.get(emoji)
+                     or app.emoji.get(emoji)
             if emoji_ is None:
                 raise UserInputWarning(":x: Invalid emoji")
             abp["emoji"] = emoji_
@@ -385,7 +380,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             {
                 "role": int(AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1]),
                 "style": c.style.name,
-                **({"emoji": interaction.client.app.emoji_rev.get(c.emoji.name) or c.emoji.name} if c.emoji else {}),
+                **({"emoji": app.emoji_rev.get(c.emoji.name) or c.emoji.name} if c.emoji else {}),
                 **({"label": cls.label_rev_escape(c.label)} if c.label else {})
             }
             for c in components
@@ -497,7 +492,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
 
         if emoji:
             emoji_ = discord.utils.get(interaction.guild.emojis, name=emoji) \
-                     or interaction.client.app.emoji.get(emoji)
+                     or app.emoji.get(emoji)
             if emoji_ is None:
                 raise UserInputWarning(":x: Invalid emoji")
             abp["emoji"] = emoji_
@@ -540,7 +535,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             {
                 "role": int(AutoroleDropdownView.value_regex.fullmatch(o.value)[1]),
                 "label": cls.label_rev_escape(o.label),
-                **({"emoji": interaction.client.app.emoji_rev.get(o.emoji.name) or o.emoji.name} if o.emoji else {}),
+                **({"emoji": app.emoji_rev.get(o.emoji.name) or o.emoji.name} if o.emoji else {}),
                 **({"description": cls.label_rev_escape(o.description)} if o.description else {})
             }
             for o in dropdown.options
@@ -558,7 +553,7 @@ class AutoroleType(enum.Enum):
     Dropdown = AutoroleDropdownForm
 
 
-class AutoroleCog(MyCog["MyBot"], commands.Cog):
+class AutoroleCog(commands.Cog):
     @discord.app_commands.command(description="Create an autorole message")
     @discord.app_commands.rename(type_="type")
     @discord.app_commands.describe(type_="Component type")

@@ -6,10 +6,9 @@ if TYPE_CHECKING:
     from typing import List, Type
     from discord.ext import commands
     from ...MyBot import MyBot
-    from ...MyCog import MyCog
 
 
-cogs: "List[Type[MyCog[MyBot] | commands.Cog]]" = [
+cogs: "List[Type[commands.Cog]]" = [
     ##########
     # Add cogs here
     ##########

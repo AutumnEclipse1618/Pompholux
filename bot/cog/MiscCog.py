@@ -1,17 +1,8 @@
-from typing import TYPE_CHECKING
-
 import discord
 from discord.ext import commands
 
-from bot.MyCog import MyCog
 
-if TYPE_CHECKING:
-    import discord.types.interactions
-    # noinspection PyUnresolvedReferences
-    from ..MyBot import MyBot
-
-
-class MiscCog(MyCog["MyBot"], commands.Cog):
+class MiscCog(commands.Cog):
     @discord.app_commands.command(description="Link to wiki")
     async def help(self, ctx: discord.Interaction):
         view = discord.ui.View()
