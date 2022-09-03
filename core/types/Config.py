@@ -8,6 +8,7 @@ class Versions:
     version: str
     python: str
     discord_py: str
+    motor: str
     dacite: str
 
 
@@ -29,8 +30,15 @@ class Discord:
 
 
 @dataclass
+class Database:
+    """MongoDB credentials and related settings"""
+    connection: str
+
+
+@dataclass
 class Config:
     """Main App Configuration"""
     Versions: Versions
     Debug: Debug
     Discord: Discord
+    Database: Database

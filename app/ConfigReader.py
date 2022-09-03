@@ -15,7 +15,7 @@ def read_config(cls: Type[T], *files: str) -> T:
         """Replace all invalid characters with an underscore"""
         return re.sub(r'\W', "_", key, re.ASCII)
 
-    cfg = configparser.ConfigParser(allow_no_value=True)
+    cfg = configparser.ConfigParser(allow_no_value=True, interpolation=configparser.ExtendedInterpolation())
     cfg.optionxform = lambda o: escape(o)
 
     cfg.read(files)
