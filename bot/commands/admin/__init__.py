@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING
 
-from .AutoroleCog import AutoroleCog, AutoroleButtonsView, AutoroleDropdownView, edit_autorole
+import discord
+
+from .Autorole import autorole, AutoroleButtonsView, AutoroleDropdownView, edit_autorole
 
 if TYPE_CHECKING:
     from typing import List, Type
@@ -12,7 +14,7 @@ cogs: "List[Type[commands.Cog]]" = [
     ##########
     # Add cogs here
     ##########
-    AutoroleCog,
+
     ##########
 ]
 
@@ -20,6 +22,16 @@ cogs: "List[Type[commands.Cog]]" = [
 async def setup(bot: "MyBot"):
     for cog in cogs:
         await bot.add_cog(cog(bot))
+
+    admin_group = discord.app_commands.Group(
+        name="admin",
+        description="Admin commands",
+        guild_only=True,
+    )
+    admin_group.add_command(autorole)
+    bot.tree.add_command(admin_group)
+
     bot.tree.add_command(edit_autorole)
+
     bot.add_raw_view(AutoroleButtonsView)
     bot.add_raw_view(AutoroleDropdownView)

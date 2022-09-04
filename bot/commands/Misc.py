@@ -1,8 +1,6 @@
 import discord
 from discord.ext import commands
 
-import db.Servers
-
 
 class MiscCog(commands.Cog):
     @discord.app_commands.command(description="Link to wiki")
@@ -13,7 +11,3 @@ class MiscCog(commands.Cog):
             url="https://github.com/AutumnEclipse1618/Pompholux/wiki",
         ))
         await ctx.response.send_message(view=view, ephemeral=True)
-
-    @discord.app_commands.command(description="foo")
-    async def foo(self, ctx: discord.Interaction):
-        await ctx.response.send_message(await db.Servers.find_one(ctx.guild_id), ephemeral=True)

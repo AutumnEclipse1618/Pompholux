@@ -553,14 +553,14 @@ class AutoroleType(enum.Enum):
     Dropdown = AutoroleDropdownForm
 
 
-class AutoroleCog(commands.Cog):
-    @discord.app_commands.command(description="Create an autorole message")
-    @discord.app_commands.rename(type_="type")
-    @discord.app_commands.describe(type_="Component type")
-    @discord.app_commands.guild_only()
-    @discord.app_commands.default_permissions(administrator=True)
-    async def autorole(self, ctx: discord.Interaction, type_: AutoroleType):
-        await ctx.response.send_modal(type_.value())
+@discord.app_commands.command(description="Create an autorole message")
+@discord.app_commands.rename(type_="type")
+@discord.app_commands.describe(type_="Component type")
+@discord.app_commands.guild_only()
+@discord.app_commands.default_permissions(administrator=True)
+async def autorole(ctx: discord.Interaction, type_: AutoroleType):
+    await ctx.response.send_modal(type_.value())
+autorole: discord.app_commands.Command
 
 
 @discord.app_commands.context_menu(name="Edit Autorole")

@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from .MiscCog import MiscCog
+from .Misc import MiscCog
 
 if TYPE_CHECKING:
     from typing import List, Type
@@ -20,4 +20,4 @@ cogs: "List[Type[commands.Cog]]" = [
 async def setup(bot: "MyBot"):
     for cog in cogs:
         await bot.add_cog(cog())
-    await bot.load_extension("bot.cog.admin")
+    await bot.load_extension("bot.commands.admin")

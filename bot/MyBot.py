@@ -39,7 +39,7 @@ class MyBot(commands.Bot):
             return commands.when_mentioned(bot, message)
 
     async def setup_hook(self):
-        await self.load_extension("bot.cog")
+        await self.load_extension("bot.commands")
 
     async def on_ready(self):
         if app.config.Discord.SYNC_COMMANDS:
