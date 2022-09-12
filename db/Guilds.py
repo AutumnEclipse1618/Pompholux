@@ -1,6 +1,6 @@
 from app import app
-from core.util import uint64_to_int
-from db.models.types import MongoProjection, Int, from_dict, asdict
+from core.util import Int, uint64_to_int
+from db.models.types import MongoProjection, from_dict, asdict
 from db.models.Guild import Guild, Autochannel
 
 

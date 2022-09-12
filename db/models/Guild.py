@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Optional
 
-from db.models.types import uint64
+from core.util import uint64
 
 
 @dataclasses.dataclass

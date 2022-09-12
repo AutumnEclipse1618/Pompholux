@@ -1,13 +1,10 @@
 import dataclasses
 from typing import TypeAlias, TypeVar, Type, Any, List, Dict
 
-from bson import Int64
 import dacite
 
-from core.util import int_to_uint64, uint64_to_int
+from core.util import uint64, int_to_uint64, uint64_to_int
 
-uint64: TypeAlias = Int64
-Int: TypeAlias = int | uint64 | Int64
 MongoProjection: TypeAlias = List[str] | Dict[str, bool]
 T = TypeVar("T")
 

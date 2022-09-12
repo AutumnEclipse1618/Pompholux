@@ -33,6 +33,8 @@ class ContentResult(TypedDict):
     embeds: list[discord.Embed]
 
 
+# TODO make validation extensible
+# TODO replace VALIDATION_ERR_MSG {field}
 class ContentValidation:
     content_validator = jsonschema.Draft202012Validator({
         "type": "object",
