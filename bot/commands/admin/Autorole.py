@@ -6,21 +6,15 @@ from abc import ABC, abstractmethod
 from typing import List, TypedDict, Dict, Any, Type, TypeVar, Optional
 
 import discord
-import jsonschema
-
 from discord.ext import commands
+import jsonschema
 
 from app import app
 from core.util import make_escape, tryint, predicate_or, pop_dict
-from core.util.discord import walk_components
+from core.util.discord import walk_components, ContentValidation
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
 from bot.RawView import RawView
-
-
-class AutoroleMessageParams(TypedDict, total=False):
-    content: str
-    embeds: List[discord.Embed]
 
 
 class AutoroleButtonParams(TypedDict, total=False):
@@ -139,66 +133,6 @@ class AutoroleFormBase(MyModal, ABC):
     content: discord.ui.TextInput
     roles: discord.ui.TextInput
 
-    content_validator = jsonschema.Draft202012Validator({
-        "type": "object",
-        "minProperties": 1,
-        "additionalProperties": False,
-        "properties": {
-            "content": { "type": "string", "minLength": 1 },
-            "embed": { "$anchor": "embed", "type": "object", "minProperties": 1 },
-            "embeds": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "$ref": "#embed" } },
-        },
-        "not": { "$anchor": "notEmbeds", "required": ["embed", "embeds"] },  # Not have both "embed" and "embeds"
-    })
-    VALIDATOR_ERR_MSG = \
-        ":x: \"{field}\" JSON does not conform to schema\n" \
-        "```\nError at element {path}\n" \
-        "{message}```"
-
-    @classmethod
-    def _validation_error(cls, *args, **kwargs):
-        return UserInputWarning(cls.VALIDATOR_ERR_MSG.format(*args, **kwargs))
-
-    # noinspection PyUnusedLocal
-    async def parse_content_input(self, interaction: discord.Interaction) -> AutoroleMessageParams:
-        content = self.content.value
-        if not content.startswith("{"):
-            return AutoroleMessageParams(content=content, embeds=[])
-        else:
-            try:
-                dct: Dict[str, Any] = json.loads(content)
-                self.content_validator.validate(dct)
-            except Exception as ex:
-                match ex:
-                    case json.JSONDecodeError():
-                        raise UserInputWarning(f":x: \"Content\" input is not valid JSON\n```\n{ex}```") from ex
-                    case jsonschema.ValidationError(
-                        json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
-                    ):
-                        raise self._validation_error(field="Content", path=json_path,
-                                                     message=f"Maximum length is {_max}") from ex
-                    case jsonschema.ValidationError(
-                        json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
-                    ) if _min == 1:
-                        raise self._validation_error(field="Content", path=json_path,
-                                                     message="Value cannot be empty") from ex
-                    case jsonschema.ValidationError(
-                        json_path=json_path, validator="not", validator_value={"$anchor": "notEmbeds"}
-                    ):
-                        raise self._validation_error(field="Content", path=json_path,
-                                                     message="Cannot have both \"embed\" and \"embeds\" properties"
-                                                     ) from ex
-                    case jsonschema.ValidationError(json_path=json_path, message=message):
-                        raise self._validation_error(field="Content", path=json_path, message=message) from ex
-                    case _:
-                        raise ex
-            if "embed" in dct:
-                dct["embeds"] = [dct["embed"]]
-            return AutoroleMessageParams(
-                content=dct["content"] if "content" in dct else "",
-                embeds=[discord.Embed.from_dict(e) for e in dct["embeds"]] if "embeds" in dct else []
-            )
-
     @abstractmethod
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleParamsT]:
         pass
@@ -219,7 +153,7 @@ class AutoroleFormBase(MyModal, ABC):
         await interaction.response.defer()
 
         try:
-            content = await self.parse_content_input(interaction)
+            content = await ContentValidation.parse(self.content.value)
         except UserInputWarning:
             raise
 
@@ -327,15 +261,15 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
                 case jsonschema.ValidationError(
                     json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
                 ):
-                    raise self._validation_error(field="Roles", path=json_path,
-                                                 message=f"Maximum length is {_max}") from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path,
+                                                             message=f"Maximum length is {_max}") from ex
                 case jsonschema.ValidationError(
                     json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
                 ) if _min == 1:
-                    raise self._validation_error(field="Roles", path=json_path,
-                                                 message="Value cannot be empty") from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path,
+                                                             message="Value cannot be empty") from ex
                 case jsonschema.ValidationError(json_path=json_path, message=message):
-                    raise self._validation_error(field="Roles", path=json_path, message=message) from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path, message=message) from ex
                 case _:
                     raise ex
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
@@ -463,15 +397,15 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
                 case jsonschema.ValidationError(
                     json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
                 ):
-                    raise self._validation_error(field="Roles", path=json_path,
-                                                 message=f"Maximum length is {_max}") from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path,
+                                                             message=f"Maximum length is {_max}") from ex
                 case jsonschema.ValidationError(
                     json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
                 ) if _min == 1:
-                    raise self._validation_error(field="Roles", path=json_path,
-                                                 message="Value cannot be empty") from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path,
+                                                             message="Value cannot be empty") from ex
                 case jsonschema.ValidationError(json_path=json_path, message=message):
-                    raise self._validation_error(field="Roles", path=json_path, message=message) from ex
+                    raise ContentValidation.validation_error(field="Roles", path=json_path, message=message) from ex
                 case _:
                     raise ex
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
@@ -553,14 +487,15 @@ class AutoroleType(enum.Enum):
     Dropdown = AutoroleDropdownForm
 
 
-@discord.app_commands.command(description="Create an autorole message")
-@discord.app_commands.rename(type_="type")
-@discord.app_commands.describe(type_="Component type")
-@discord.app_commands.guild_only()
-@discord.app_commands.default_permissions(administrator=True)
-async def autorole(ctx: discord.Interaction, type_: AutoroleType):
-    await ctx.response.send_modal(type_.value())
-autorole: discord.app_commands.Command
+class AutoroleCog(commands.Cog):
+    @discord.app_commands.command(description="Create an autorole message")
+    @discord.app_commands.rename(type_="type")
+    @discord.app_commands.describe(type_="Component type")
+    @discord.app_commands.guild_only()
+    @discord.app_commands.default_permissions(administrator=True)
+    async def autorole(self, ctx: discord.Interaction, type_: AutoroleType):
+        await ctx.response.send_modal(type_.value())
+    autorole: discord.app_commands.Command
 
 
 @discord.app_commands.context_menu(name="Edit Autorole")
