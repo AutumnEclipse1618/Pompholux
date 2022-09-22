@@ -1,41 +1,21 @@
-from typing import Callable, ParamSpec, TypeVar
+from operator import itemgetter
+from typing import TypeVar, Sequence
 
 __all__ = [
-    "predicate_or",
-    "predicate_and",
-    "predicate_or_async",
-    "predicate_and_async",
     "pop_dict",
+    "destructure",
 ]
 
 
-P = ParamSpec('P')
-KT = TypeVar("KT")
-VT = TypeVar("VT")
+_KT = TypeVar("_KT")
+_VT = TypeVar("_VT")
 
 
-def predicate_or(*predicates: Callable[P, bool]) -> Callable[P, bool]:
-    return lambda *args, **kwargs: any(pred(*args, **kwargs) for pred in predicates)
-
-
-def predicate_and(*predicates: Callable[P, bool]) -> Callable[P, bool]:
-    return lambda *args, **kwargs: all(pred(*args, **kwargs) for pred in predicates)
-
-
-def predicate_or_async(*predicates):
-    async def _lambda(*args, **kwargs):
-        return any(await pred(*args, **kwargs) for pred in predicates)
-    return _lambda
-
-
-def predicate_and_async(*predicates):
-    async def _lambda(*args, **kwargs):
-        return all(await pred(*args, **kwargs) for pred in predicates)
-
-    return _lambda
-
-
-def pop_dict(dct: dict[KT, VT], *keys: KT) -> dict[KT, VT]:
+def pop_dict(dct: dict[_KT, _VT], *keys: _KT) -> dict[_KT, _VT]:
     for key in keys:
         dct.pop(key)
     return dct
+
+
+def destructure(dct: dict[str, _VT], *keys: str) -> Sequence[_VT]:
+    return itemgetter(*keys)(dct)
