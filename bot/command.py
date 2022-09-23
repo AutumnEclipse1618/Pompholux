@@ -17,7 +17,8 @@ class MyTree(app_commands.CommandTree["MyBot"]):
             case app_commands.CommandInvokeError(original=UserInputWarning(message)):
                 await interaction.response.send_message(message, ephemeral=True)
             case _:
-                await interaction.response.defer()
+                if not interaction.response.is_done:
+                    await interaction.response.defer()
                 # noinspection PyTypeChecker
                 command: app_commands.Command | app_commands.ContextMenu | None = interaction.command
                 if command is not None and not command._has_any_error_handlers():

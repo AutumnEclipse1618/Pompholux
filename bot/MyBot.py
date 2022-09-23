@@ -21,8 +21,7 @@ class MyBot(commands.Bot):
 
         self.my_logger = logging.getLogger("MyBot")
 
-        intents = discord.Intents.default()
-        intents.message_content = True
+        intents = discord.Intents.default() | discord.Intents(members=True)
         commands.Bot.__init__(
             self,
             tree_cls=MyTree,

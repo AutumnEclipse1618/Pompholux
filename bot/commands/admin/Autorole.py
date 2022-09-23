@@ -153,7 +153,7 @@ class AutoroleFormBase(MyModal, ABC):
         await interaction.response.defer()
 
         try:
-            content = await ContentValidation.parse(self.content.value)
+            content = ContentValidation.parse(self.content.value)
         except UserInputWarning:
             raise
 

@@ -57,7 +57,7 @@ class ContentValidation:
         return UserInputWarning(cls.VALIDATOR_ERR_MSG.format(*args, **kwargs))
 
     @classmethod
-    async def parse(cls, content: str) -> ContentResult:
+    def parse(cls, content: str) -> ContentResult:
         if not content.startswith("{"):
             return ContentResult(content=content, embeds=[])
         else:
