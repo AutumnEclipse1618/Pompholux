@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 from app import app
+import db.Guilds
 
 from .command import MyTree
 from .RawView import RawViewStore, RawViewT
@@ -53,6 +54,12 @@ class MyBot(commands.Bot):
         for guild in map(discord.Object, app.config.Debug.guild):
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
+
+    async def on_guild_join(self, guild: discord.Guild):  # noqa
+        await db.Guilds.create(guild.id)
+
+    async def on_guild_remove(self, guild: discord.Guild):  # noqa
+        await db.Guilds.delete(guild.id)
 
     async def on_command_error(self, ctx: commands.Context, ex: Exception, /) -> None:
         match ex:
