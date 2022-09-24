@@ -56,8 +56,12 @@ def make_escape(escape: str | list[str] = "\\", chars: str | list[str] = "") -> 
 
 
 class MyFormatter:
-    # TODO convert autorole from %value% to $value
     # TODO strict mode
+
+    @classmethod
+    def escape(cls, string: str):
+        return string.replace("$", "$$").replace("%", "%%")
+
     @classmethod
     def format(cls, string: str, **kwargs: str | bool) -> str:
         vals = {k: v for k, v in kwargs.items() if isinstance(v, str)}

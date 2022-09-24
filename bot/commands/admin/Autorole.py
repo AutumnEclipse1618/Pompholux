@@ -10,7 +10,7 @@ from discord.ext import commands
 import jsonschema
 
 from app import app
-from core.util import make_escape, tryint, predicate_or, pop_dict
+from core.util import tryint, predicate_or, pop_dict, MyFormatter
 from core.util.discord import walk_components, ContentValidation
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
@@ -94,7 +94,7 @@ class AutoroleDropdownView(RawView):
     ):
         await interaction.response.defer()
         dropdown_component = discord.utils.get(walk_components(interaction.message), custom_id=cls.custom_id)
-        data: discord.types.interactions.SelectMessageComponentInteractionData = interaction.data
+        data: discord.types.interactions.SelectMessageComponentInteractionData = interaction.data  # noqa
         user_roles = {discord.Object(r_.id) for r_ in interaction.user.roles}
         all_roles = {
             discord.Object(r)
@@ -137,17 +137,8 @@ class AutoroleFormBase(MyModal, ABC):
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleParamsT]:
         pass
 
-    # noinspection PyUnusedLocal
     async def parse_fields(self, interaction: discord.Interaction) -> Dict[str, Any]:
         return {}
-
-    ROLENAME = "%ROLENAME%"
-    _rolename_regex = re.compile(ROLENAME, re.IGNORECASE)
-    label_escape, label_unescape, label_rev_escape = map(staticmethod, make_escape(escape="%"))
-
-    @classmethod
-    def label_rolename_replace(cls, repl: str, string: str):
-        return cls._rolename_regex.sub(repl, string)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -182,6 +173,8 @@ class AutoroleFormBase(MyModal, ABC):
                 )
         except discord.HTTPException as ex:
             raise UserInputWarning(":x: Message could not be sent") from ex
+
+    ROLENAME = "${ROLENAME}"
 
     @classmethod
     def prefill_content_from_message(cls, message: discord.Message) -> str:
@@ -299,7 +292,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             abp["emoji"] = emoji_
 
         if (label_ := label or (self.ROLENAME if emoji is None else None)) is not None:
-            abp["label"] = self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(label_)))
+            abp["label"] = MyFormatter.format(label_, rolename=role_.name)
 
         return abp
 
@@ -309,13 +302,12 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
 
         components: List[discord.Button] = walk_components(message)
 
-        # noinspection PyUnresolvedReferences
         roles = [
             {
                 "role": int(AutoroleButtonsView.custom_id_regex.fullmatch(c.custom_id)[1]),
-                "style": c.style.name,
+                "style": c.style.name,  # noqa
                 **({"emoji": app.emoji_rev.get(c.emoji.name) or c.emoji.name} if c.emoji else {}),
-                **({"label": cls.label_rev_escape(c.label)} if c.label else {})
+                **({"label": MyFormatter.escape(c.label)} if c.label else {})
             }
             for c in components
         ]
@@ -432,11 +424,10 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             abp["emoji"] = emoji_
 
         label_ = label or self.ROLENAME
-        abp["label"] = self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(label_)))
+        abp["label"] = MyFormatter.format(label_, rolename=role_.name)
 
         if description:
-            abp["description"] = \
-                self.label_unescape(self.label_rolename_replace(role_.name, self.label_escape(description)))
+            abp["description"] = MyFormatter.format(description, rolename=role_.name)
 
         return abp
 
@@ -468,9 +459,9 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         roles = [
             {
                 "role": int(AutoroleDropdownView.value_regex.fullmatch(o.value)[1]),
-                "label": cls.label_rev_escape(o.label),
+                "label": MyFormatter.escape(o.label),
                 **({"emoji": app.emoji_rev.get(o.emoji.name) or o.emoji.name} if o.emoji else {}),
-                **({"description": cls.label_rev_escape(o.description)} if o.description else {})
+                **({"description": MyFormatter.escape(o.description)} if o.description else {})
             }
             for o in dropdown.options
         ]
