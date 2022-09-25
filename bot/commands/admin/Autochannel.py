@@ -235,8 +235,8 @@ class AutochannelCog(commands.Cog):
                     view=view
                 )
                 view.message = message
-            except Exception as ex:  # TODO discord.Forbidden | json error | http exception
-                pass
+            except (discord.HTTPException, MyJSONValidationError) as ex:
+                await notify.send(":x: A user has joined but an error occurred while creating this notification")
             else:
                 if await view.when() is True:
                     channel_name = view.channel_name
