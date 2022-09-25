@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import Callable, ParamSpec, TypeVar
+from typing import Callable, ParamSpec, TypeVar, Iterable
 
 __all__ = [
     "predicate_or",
@@ -36,5 +36,5 @@ def predicate_and_async(*predicates):
     return _lambda
 
 
-def compose(funcs: list[Callable[[_VT], _VT]], v: _VT) -> _VT:
+def compose(funcs: Iterable[Callable[[_VT], _VT]], v: _VT) -> _VT:
     return reduce(lambda acc, curr: curr(acc), funcs, v)

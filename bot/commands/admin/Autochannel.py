@@ -139,6 +139,7 @@ class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
     def generate_content(self) -> ContentResult:
         return self.content_validation.parse(MyFormatter.format(
             self.autochannel.content,
+            escape_=("channel", "category"),
             default=self.default_content,
             user=self.user.mention,
             channel=self.channel_name,
@@ -213,7 +214,7 @@ class AutochannelCog(commands.Cog):
             view = AutochannelNotification(
                 autochannel=autochannel_,
                 user=member,
-                channel_name=MyFormatter.format(autochannel_.format, user=member.name.lower().replace(" ", "-")),
+                channel_name=MyFormatter.format(autochannel_.format, escape_=("user",), user=member.name.lower().replace(" ", "-")),
                 category=(
                     category_
                     if (

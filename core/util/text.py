@@ -2,7 +2,7 @@ import enum
 import itertools
 import json
 import re
-from typing import Callable, TypeAlias, Any
+from typing import Callable, TypeAlias, Any, Iterable
 
 import jsonschema
 
@@ -11,10 +11,13 @@ from bot.error import UserInputWarning
 __all__ = [
     "make_translation",
     "make_escape",
+    "json_escape",
     "MyFormatter",
     "MyJSONValidation",
     "MyJSONValidationError",
 ]
+
+from core.util import compose
 
 
 def _trans_func(translation: dict[str, str]) -> Callable[[str], str]:
@@ -60,6 +63,10 @@ def make_escape(escape: str | list[str] = "\\", chars: str | list[str] = "") -> 
         unescape_dict[esc] = c
         rev_escape_dict[c] = rf'{e}{c}'
     return _trans_func(escape_dict), _trans_func(unescape_dict), _trans_func(rev_escape_dict)
+
+
+def json_escape(string: str) -> str:
+    return json.dumps(string)[1:-1]
 
 
 class MyJSONValidationError(Exception):
@@ -122,16 +129,17 @@ class MyFormatter:
         return string.replace("$", "$$").replace("%", "%%")
 
     @classmethod
-    def format(cls, string: str, **kwargs: str | bool) -> str:
-        vals = {k: v for k, v in kwargs.items() if isinstance(v, str)}
+    def format(cls, string: str, escape_: Iterable[str] = (), **kwargs: str | bool) -> str:
+        vals = {k.lower(): v for k, v in kwargs.items() if isinstance(v, str)}
         conds = {
-            **{k: v for k, v in kwargs.items() if isinstance(v, bool)},
+            **{k.lower(): v for k, v in kwargs.items() if isinstance(v, bool)},
             **{k: bool(v) for k, v in vals.items()}
         }
-        return cls._format(string, vals, conds)
+        _escape = {s.lower() for s in escape_}
+        return cls._format(string, vals, conds, _escape)
 
     @classmethod
-    def _format(cls, string: str, vals: dict[str, str], conds: dict[str, bool]) -> str:
+    def _format(cls, string: str, vals: dict[str, str], conds: dict[str, bool], escape_: set[str]) -> str:
         result = ""
         buffer = ""
         brace_level = 0
@@ -180,11 +188,11 @@ class MyFormatter:
                         continue
                     elif c == "}":
                         buffer += c
-                        result += cls._format_val(buffer, vals, conds)
+                        result += cls._format_val(buffer, vals, conds, escape_)
                         buffer = ""
                         state = States.NORMAL; continue
-                    elif not re.fullmatch(r"\w", c, re.ASCII):
-                        result += cls._format_val(buffer, vals, conds) + c
+                    elif not re.fullmatch(r"[\w!]", c, re.ASCII):
+                        result += cls._format_val(buffer, vals, conds, escape_) + c
                         buffer = ""
                         state = States.NORMAL; continue
                     else:
@@ -211,7 +219,7 @@ class MyFormatter:
                         buffer += prev_char + c
                         brace_level = max(0, brace_level - 1)
                         if brace_level == 0:
-                            result += cls._format_cond(buffer, vals, conds)
+                            result += cls._format_cond(buffer, vals, conds, escape_)
                             buffer = ""
                             state = States.NORMAL; continue
                         else:
@@ -220,17 +228,26 @@ class MyFormatter:
                     state = States.COND; continue
         return result
 
-    @classmethod
-    def _format_val(cls, string: str, vals: dict[str, str], conds: dict[str, bool]) -> str:
-        val_regex = re.compile(r"\$\{(?P<key>\w+)\}", re.ASCII)
-        val = ""
-        return \
-            cls._format(val, vals, conds) \
-            if (match_ := val_regex.fullmatch(string)) and (val := vals.get(match_["key"].lower())) \
-            else string
+    val_format_specifiers: dict[str, Callable[[str], str]] = {
+        "j": lambda s: json_escape(s),
+        "u": lambda s: s.upper(),
+        "l": lambda s: s.lower(),
+    }
 
     @classmethod
-    def _format_cond(cls, string: str, vals: dict[str, str], conds: dict[str, bool]) -> str:
+    def _format_val(cls, string: str, vals: dict[str, str], conds: dict[str, bool], escape_: set[str]) -> str:
+        val_regex = re.compile(r"\$\{(?P<key>\w+)(?:!(?P<format>[a-z]+))?\}", re.ASCII | re.IGNORECASE)
+        if (
+            not (match_ := val_regex.fullmatch(string))
+            or not (val := vals.get((key := match_["key"].lower())))
+            or None in (formats := tuple(map(cls.val_format_specifiers.get, (match_["format"] or "").lower())))
+        ):
+            return string
+        # noinspection PyUnboundLocalVariable
+        return compose(formats, cls._format(val, vals, conds, escape_) if key not in escape_ else val)
+
+    @classmethod
+    def _format_cond(cls, string: str, vals: dict[str, str], conds: dict[str, bool], escape_: set[str]) -> str:
         cond_regex = re.compile(r"\%\{(?P<cond>\w+)\%\|(?P<body>.*)\%\}", re.ASCII | re.DOTALL)
         if not (match := cond_regex.fullmatch(string)):
             return string
@@ -277,4 +294,4 @@ class MyFormatter:
                         continue
                     false_val += c
 
-        return cls._format(true_val if cond else false_val, vals, conds)
+        return cls._format(true_val if cond else false_val, vals, conds, escape_)
