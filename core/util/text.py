@@ -1,12 +1,19 @@
 import enum
 import itertools
+import json
 import re
-from typing import Callable, TypeAlias
+from typing import Callable, TypeAlias, Any
+
+import jsonschema
+
+from bot.error import UserInputWarning
 
 __all__ = [
     "make_translation",
     "make_escape",
     "MyFormatter",
+    "MyJSONValidation",
+    "MyJSONValidationError",
 ]
 
 
@@ -53,6 +60,58 @@ def make_escape(escape: str | list[str] = "\\", chars: str | list[str] = "") -> 
         unescape_dict[esc] = c
         rev_escape_dict[c] = rf'{e}{c}'
     return _trans_func(escape_dict), _trans_func(unescape_dict), _trans_func(rev_escape_dict)
+
+
+class MyJSONValidationError(Exception):
+    DECODER_ERR_MSG = \
+        ":x: \"{field}\" input is not valid JSON\n" \
+        "```\n{message}```"
+    VALIDATOR_ERR_MSG = \
+        ":x: \"{field}\" JSON does not conform to schema\n" \
+        "```\nError at element {path}\n" \
+        "{message}```"
+
+    def __init__(self, message: str, path: str | None):
+        self.message = message
+        self.path = path
+
+    def user_warning(self, field: str):
+        ex = UserInputWarning(
+            self.VALIDATOR_ERR_MSG.format(field=field, path=self.path, message=self.message)
+            if self.path
+            else self.DECODER_ERR_MSG.format(field=field, message=self.message)
+        )
+        ex.__cause__ = self
+        return ex
+
+
+class MyJSONValidation:
+    def __init__(self, validator: jsonschema.protocols.Validator):
+        self.validator = validator
+
+    def parse(self, string: str) -> Any:
+        try:
+            dct = json.loads(string)
+            self.validator.validate(dct)
+            return dct
+        except Exception as ex:
+            match ex:
+                case json.JSONDecodeError():
+                    raise MyJSONValidationError(path=None, message=str(ex)) from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
+                ):
+                    raise MyJSONValidationError(path=json_path,
+                                                message=f"Maximum length is {_max}") from ex
+                case jsonschema.ValidationError(
+                    json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
+                ) if _min == 1:
+                    raise MyJSONValidationError(path=json_path,
+                                                message="Value cannot be empty") from ex
+                case jsonschema.ValidationError(json_path=json_path, message=message):
+                    raise MyJSONValidationError(path=json_path, message=message) from ex
+                case _:
+                    raise ex
 
 
 class MyFormatter:

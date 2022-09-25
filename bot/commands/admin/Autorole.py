@@ -10,7 +10,7 @@ from discord.ext import commands
 import jsonschema
 
 from app import app
-from core.util import tryint, predicate_or, pop_dict, MyFormatter
+from core.util import tryint, predicate_or, pop_dict, MyFormatter, MyJSONValidation, MyJSONValidationError
 from core.util.discord import walk_components, ContentValidation
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
@@ -140,13 +140,15 @@ class AutoroleFormBase(MyModal, ABC):
     async def parse_fields(self, interaction: discord.Interaction) -> Dict[str, Any]:
         return {}
 
+    content_validation = ContentValidation()
+
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
         try:
-            content = ContentValidation.parse(self.content.value)
-        except UserInputWarning:
-            raise
+            content = self.content_validation.parse(self.content.value)
+        except MyJSONValidationError as ex:
+            raise ex.user_warning("Content")
 
         try:
             roles = await self.parse_roles_input(interaction)
@@ -223,7 +225,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
         **dict.fromkeys(("success", "green"), discord.enums.ButtonStyle.success),
         **dict.fromkeys(("danger", "red"), discord.enums.ButtonStyle.danger),
     }
-    roles_validator = jsonschema.validators.extend(
+    roles_validation = MyJSONValidation(jsonschema.validators.extend(
         # Use Draft 4 type checkers so that numbers ending in .0 count as invalid ints
         jsonschema.Draft202012Validator, type_checker=jsonschema.Draft4Validator.TYPE_CHECKER
     )({
@@ -241,30 +243,13 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             },
             "required": ["role"],
         },
-    })
+    }))
 
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleButtonParams]:
         try:
-            lst: List[Dict[str, Any]] = json.loads(self.roles.value)
-            self.roles_validator.validate(lst)
-        except Exception as ex:
-            match ex:
-                case json.JSONDecodeError():
-                    raise UserInputWarning(f":x: \"Roles\" input is not valid JSON\n```\n{ex}```") from ex
-                case jsonschema.ValidationError(
-                    json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
-                ):
-                    raise ContentValidation.validation_error(field="Roles", path=json_path,
-                                                             message=f"Maximum length is {_max}") from ex
-                case jsonschema.ValidationError(
-                    json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
-                ) if _min == 1:
-                    raise ContentValidation.validation_error(field="Roles", path=json_path,
-                                                             message="Value cannot be empty") from ex
-                case jsonschema.ValidationError(json_path=json_path, message=message):
-                    raise ContentValidation.validation_error(field="Roles", path=json_path, message=message) from ex
-                case _:
-                    raise ex
+            lst: List[Dict[str, Any]] = self.roles_validation.parse(self.roles.value)
+        except MyJSONValidationError as ex:
+            raise ex.user_warning("Roles")
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
 
     async def _parse_role_input(
@@ -358,7 +343,7 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
         )
         self.add_item(self.content).add_item(self.roles).add_item(self.min).add_item(self.max)
 
-    roles_validator = jsonschema.validators.extend(
+    roles_validation = MyJSONValidation(jsonschema.validators.extend(
         # Use Draft 4 type checkers so that numbers ending in .0 count as invalid ints
         jsonschema.Draft202012Validator, type_checker=jsonschema.Draft4Validator.TYPE_CHECKER
     )({
@@ -376,30 +361,13 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             },
             "required": ["role"],
         },
-    })
+    }))
 
     async def parse_roles_input(self, interaction: discord.Interaction) -> List[AutoroleDropdownValueParams]:
         try:
-            lst: List[Dict[str, Any]] = json.loads(self.roles.value)
-            self.roles_validator.validate(lst)
-        except Exception as ex:
-            match ex:
-                case json.JSONDecodeError():
-                    raise UserInputWarning(f":x: \"Roles\" input is not valid JSON\n```\n{ex}```") from ex
-                case jsonschema.ValidationError(
-                    json_path=json_path, validator="maxItems" | "maxLength", validator_value=_max
-                ):
-                    raise ContentValidation.validation_error(field="Roles", path=json_path,
-                                                             message=f"Maximum length is {_max}") from ex
-                case jsonschema.ValidationError(
-                    json_path=json_path, validator="minProperties" | "minItems" | "minLength", validator_value=_min
-                ) if _min == 1:
-                    raise ContentValidation.validation_error(field="Roles", path=json_path,
-                                                             message="Value cannot be empty") from ex
-                case jsonschema.ValidationError(json_path=json_path, message=message):
-                    raise ContentValidation.validation_error(field="Roles", path=json_path, message=message) from ex
-                case _:
-                    raise ex
+            lst: List[Dict[str, Any]] = self.roles_validation.parse(self.roles.value)
+        except MyJSONValidationError as ex:
+            raise ex.user_warning("Roles")
         return list(await asyncio.gather(*[self._parse_role_input(interaction, **dct) for dct in lst]))
 
     async def _parse_role_input(

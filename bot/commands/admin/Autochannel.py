@@ -9,7 +9,7 @@ import db.Guilds
 from bot.MyViews import FinishableView, ResolvableView, MutexView
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
-from core.util import tryint, MyFormatter
+from core.util import tryint, MyFormatter, MyJSONValidationError
 from core.util.discord import ContentValidation, ContentResult
 from db.models.Guild import Autochannel
 
@@ -55,6 +55,8 @@ class AutochannelForm(MyModal, title="Autochannel Options"):
             channels
         )
 
+    content_validation = ContentValidation()
+
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         _notify: "discord.guild.GuildChannel | discord.Thread" = discord.utils.find(
@@ -65,9 +67,9 @@ class AutochannelForm(MyModal, title="Autochannel Options"):
             raise UserInputWarning(":x: Notification channel must be a valid text channel/thread name and ID")
 
         try:
-            ContentValidation.parse(self.content.value)
-        except UserInputWarning:
-            raise
+            self.content_validation.parse(self.content.value)
+        except MyJSONValidationError as ex:
+            raise ex.user_warning("Content")
 
         _category = self.get_category(self.category.value, interaction.guild.channels)
         if self.category.value and not _category:
@@ -132,8 +134,10 @@ class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
         "${USER} has joined, channel \"${CHANNEL}\" will be created\n" \
         "It will be added %{CATEGORY%|to %{NEW_CATEGORY%|a new %}category \"${CATEGORY}\"%|outside of any category%}"
 
+    content_validation = ContentValidation()
+
     def generate_content(self) -> ContentResult:
-        return ContentValidation.parse(MyFormatter.format(
+        return self.content_validation.parse(MyFormatter.format(
             self.autochannel.content,
             default=self.default_content,
             user=self.user.mention,
@@ -230,7 +234,7 @@ class AutochannelCog(commands.Cog):
                     view=view
                 )
                 view.message = message
-            except:  # TODO discord.Forbidden | json error | http exception
+            except Exception as ex:  # TODO discord.Forbidden | json error | http exception
                 pass
             else:
                 if await view.when() is True:
