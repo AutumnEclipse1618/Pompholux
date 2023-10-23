@@ -9,6 +9,7 @@ import jsonschema
 from bot.error import UserInputWarning
 
 __all__ = [
+    "convert_to_bool",
     "make_translation",
     "make_escape",
     "json_escape",
@@ -18,6 +19,21 @@ __all__ = [
 ]
 
 from core.util import compose
+
+
+def convert_to_bool(argument: str) -> bool | None:
+    """
+    Convert string to bool, based on discord.py's logic
+
+    https://github.com/Rapptz/discord.py/blob/v2.0.0/discord/ext/commands/converter.py#L1142
+    """
+    lowered = argument.lower()
+    if lowered in ('yes', 'y', 'true', 't', '1', 'enable', 'on'):
+        return True
+    elif lowered in ('no', 'n', 'false', 'f', '0', 'disable', 'off'):
+        return False
+    else:
+        return False
 
 
 def _trans_func(translation: dict[str, str]) -> Callable[[str], str]:

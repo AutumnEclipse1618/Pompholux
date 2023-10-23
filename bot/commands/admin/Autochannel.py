@@ -9,14 +9,14 @@ import db.Guilds
 from bot.MyViews import FinishableView, ResolvableView, MutexView
 from bot.MyModal import MyModal
 from bot.error import UserInputWarning
-from core.util import tryint, MyFormatter, MyJSONValidationError
+from core.util import tryint, convert_to_bool, MyFormatter, MyJSONValidationError
 from core.util.discord import ContentValidation, ContentResult
 from db.models.Guild import Autochannel
 
 
 class AutochannelForm(MyModal, title="Autochannel Options"):
     """Popup to edit guild autochannel settings"""
-    def __init__(self, notify: str, content: str, format_: str, category: str):
+    def __init__(self, notify: str, content: str, format_: str, category: str, messagePerms: bool):
         super().__init__()
         self.notify = discord.ui.TextInput(
             label="Notification Channel",
@@ -46,7 +46,14 @@ class AutochannelForm(MyModal, title="Autochannel Options"):
             required=False,
             default=category,
         )
-        self.add_item(self.notify).add_item(self.content).add_item(self.format).add_item(self.category)
+        self.messagePerms = discord.ui.TextInput(
+            label="User Manage Message Perms",
+            style=discord.TextStyle.short,
+            placeholder="True or False",
+            required=True,
+            default="True" if messagePerms else "False",
+        )
+        self.add_item(self.notify).add_item(self.content).add_item(self.format).add_item(self.category).add_item(self.messagePerms)
 
     @staticmethod
     def get_category(category: str, channels: "Sequence[discord.guild.GuildChannel]") -> discord.CategoryChannel:
@@ -75,12 +82,15 @@ class AutochannelForm(MyModal, title="Autochannel Options"):
         if self.category.value and not _category:
             raise UserInputWarning(":x: Category not valid")
 
+        _messagePerms = convert_to_bool(self.messagePerms.value) or False
+
         await db.Guilds.update_autochannel(interaction.guild.id, Autochannel(
             enabled=True,
             notify=Int64(_notify.id),
             content=self.content.value,
             format=self.format.value,
-            category=Int64(_category.id) if _category else None
+            category=Int64(_category.id) if _category else None,
+            messagePerms=_messagePerms
         ))
         await interaction.followup.send("Autochannel enabled", ephemeral=True)
 
@@ -96,8 +106,14 @@ class EditAutochannelNotificationForm(MyModal, title="Edit New Channel"):
             label="Category Name or ID", required=False,
             default=view.category.name if isinstance(view.category, discord.CategoryChannel) else view.category or ""
         )
+        self.messagePerms = discord.ui.TextInput(
+            label="User Manage Message Perms",
+            placeholder="True or False",
+            required=True,
+            default="True" if view.messagePerms else "False",
+        )
 
-        self.add_item(self.name).add_item(self.category)
+        self.add_item(self.name).add_item(self.category).add_item(self.messagePerms)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -107,19 +123,20 @@ class EditAutochannelNotificationForm(MyModal, title="Edit New Channel"):
             or None  # if value is ""
         if isinstance(category, discord.CategoryChannel) and len(category.channels) >= 50:
             raise UserInputWarning(":x: Category full")
-        else:
-            self.view.category = category
-            await self.view.update_message()
+        self.view.category = category
+        self.view.messagePerms = convert_to_bool(self.messagePerms.value) or False
+        await self.view.update_message()
 
 
 class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
     """View for message for when a user joins"""
-    def __init__(self, autochannel: Autochannel, user: discord.Member, channel_name: str, category: discord.CategoryChannel | str | None):
+    def __init__(self, autochannel: Autochannel, user: discord.Member, channel_name: str, category: discord.CategoryChannel | str | None, messagePerms: bool):
         super().__init__(timeout=43200)
         self.autochannel = autochannel
         self.user = user
         self.channel_name: str | None = channel_name
         self.category = category
+        self.messagePerms = messagePerms
 
     message: discord.Message
 
@@ -132,7 +149,8 @@ class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
     # TODO channel overflow warning?
     default_content = \
         "${USER} has joined, channel \"${CHANNEL}\" will be created\n" \
-        "It will be added %{CATEGORY%|to %{NEW_CATEGORY%|a new %}category \"${CATEGORY}\"%|outside of any category%}"
+        "It will be added %{CATEGORY%|to %{NEW_CATEGORY%|a new %}category \"${CATEGORY}\"%|outside of any category%}" \
+        "%{MESSAGE_PERMS%|\nUser will have manage message perms%}"
 
     content_validation = ContentValidation()
 
@@ -144,7 +162,8 @@ class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
             user=self.user.mention,
             channel=self.channel_name,
             category=self.category.name if isinstance(self.category, discord.CategoryChannel) else self.category or "",
-            new_category=isinstance(self.category, str)
+            new_category=isinstance(self.category, str),
+            message_perms=self.messagePerms
         ))
 
     async def update_view(self):
@@ -199,7 +218,8 @@ class AutochannelCog(commands.Cog):
                     (_category := autochannel_ and ctx.guild.get_channel(autochannel_.category))
                     and isinstance(_category, discord.CategoryChannel)
                     else ""
-                )
+                ),
+                messagePerms=autochannel_.messagePerms
             ))
         else:
             await db.Guilds.enable_autochannel(ctx.guild.id, False)
@@ -224,7 +244,8 @@ class AutochannelCog(commands.Cog):
                             and len(category_.channels) < 50
                     )
                     else None
-                )
+                ),
+                messagePerms=autochannel_.messagePerms
             )
             if not (notify := guild.get_channel(autochannel_.notify)):
                 return
@@ -241,9 +262,19 @@ class AutochannelCog(commands.Cog):
                 if await view.when() is True:
                     channel_name = view.channel_name
                     category = view.category
+                    messagePerms = view.messagePerms
                     if isinstance(category, str):
                         category = await guild.create_category(category, reason="Autochannel")
-                    await guild.create_text_channel(channel_name, category=category, reason="Autochannel")
+                    channel = await guild.create_text_channel(channel_name, category=category, reason="Autochannel")
+                    if messagePerms:
+                        await channel.set_permissions(
+                            member,
+                            reason="Autochannel",
+                            overwrite=discord.PermissionOverwrite(**{
+                                "manage_messages": True,
+                                "manage_threads": True,
+                            })
+                        )
 
 
 @discord.app_commands.context_menu(name="Join")

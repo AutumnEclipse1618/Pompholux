@@ -11,6 +11,7 @@ class Autochannel:
     content: str = None
     format: str = None
     category: Optional[uint64] = None
+    messagePerms: bool = False
 
 
 @dataclasses.dataclass
