@@ -1,0 +1,15 @@
+grammar Formatting
+    everything <- (text / value / condition)* <Everything>
+
+    _ <- [ \t\n\r]  # whitespace
+
+    text <- ([^%] / escape / ("%" ![\[\]\|]))+ %text
+    escape <- "%%" %escape
+
+    variable <- [a-zA-Z0-9_]+
+
+    value <- @"%[" variable conversion:(@"!" value_conversion)? @"]%" <Value>
+    value_conversion <- (([jJ] !([^\WjJ]* [jJ])) / ([lL] !([^\WlLuU]* [lLuU])) / ([uU] !([^\WlLuU]* [lLuU])))*
+
+    condition <- @"%[%" @_* negation:("!"?) variable:variable conversion:(@"!" condition_conversion)? @_* true_value:(@"%|%" everything)? false_value:(@"%|%" everything)? @"%]%" <Condition>
+    condition_conversion <- (([rR] !([^\WrR]* [rR])))*

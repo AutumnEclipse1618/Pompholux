@@ -71,7 +71,7 @@ class AutochannelForm(MyModal, title="Autochannel Options"):
             itertools.chain(interaction.guild.channels, interaction.guild.threads)
         )
         if not _notify:
-            raise UserInputWarning(":x: Notification channel must be a valid text channel/thread name and ID")
+            raise UserInputWarning(":x: Notification channel must be a valid formatter channel/thread name and ID")
 
         try:
             self.content_validation.parse(self.content.value)
@@ -147,17 +147,18 @@ class AutochannelNotification(FinishableView, ResolvableView[bool], MutexView):
         return await super().interaction_check(interaction)
 
     # TODO channel overflow warning?
-    default_content = \
-        "${USER} has joined, channel \"${CHANNEL}\" will be created\n" \
-        "It will be added %{CATEGORY%|to %{NEW_CATEGORY%|a new %}category \"${CATEGORY}\"%|outside of any category%}" \
-        "%{MESSAGE_PERMS%|\nUser will have manage message perms%}"
+    default_content = (
+        "%[USER]% has joined, channel \"%[CHANNEL]%\" will be created\n"
+        "It will be added %[%CATEGORY%|%to %[%NEW_CATEGORY%|%a new %]%category \"%[CATEGORY]%\"%|%outside of any category%]%"
+        "%[%MESSAGE_PERMS!r%|%\nUser will have manage message perms%]%"
+    )
 
     content_validation = ContentValidation()
 
     def generate_content(self) -> ContentResult:
         return self.content_validation.parse(MyFormatter.format(
             self.autochannel.content,
-            escape_=("channel", "category"),
+            recurse=("default",),
             default=self.default_content,
             user=self.user.mention,
             channel=self.channel_name,
@@ -234,7 +235,7 @@ class AutochannelCog(commands.Cog):
             view = AutochannelNotification(
                 autochannel=autochannel_,
                 user=member,
-                channel_name=MyFormatter.format(autochannel_.format, escape_=("user",), user=member.name.lower().replace(" ", "-")),
+                channel_name=MyFormatter.format(autochannel_.format, user=member.name.lower().replace(" ", "-")),
                 category=(
                     category_
                     if (

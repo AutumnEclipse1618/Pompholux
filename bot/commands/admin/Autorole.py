@@ -176,7 +176,7 @@ class AutoroleFormBase(MyModal, ABC):
         except discord.HTTPException as ex:
             raise UserInputWarning(":x: Message could not be sent") from ex
 
-    ROLENAME = "${ROLENAME}"
+    ROLENAME = "%[ROLENAME]%"
 
     @classmethod
     def prefill_content_from_message(cls, message: discord.Message) -> str:
@@ -277,7 +277,7 @@ class AutoroleButtonsForm(AutoroleFormBase, title="Create Autorole (Buttons)"):
             abp["emoji"] = emoji_
 
         if (label_ := label or (self.ROLENAME if emoji is None else None)) is not None:
-            abp["label"] = MyFormatter.format(label_, rolename=role_.name, escape_=("rolename",))
+            abp["label"] = MyFormatter.format(label_, rolename=role_.name)
 
         return abp
 
@@ -392,10 +392,10 @@ class AutoroleDropdownForm(AutoroleFormBase, title="Create Autorole (Dropdown)")
             abp["emoji"] = emoji_
 
         label_ = label or self.ROLENAME
-        abp["label"] = MyFormatter.format(label_, rolename=role_.name, escape_=("rolename",))
+        abp["label"] = MyFormatter.format(label_, rolename=role_.name)
 
         if description:
-            abp["description"] = MyFormatter.format(description, rolename=role_.name, escape_=("rolename",))
+            abp["description"] = MyFormatter.format(description, rolename=role_.name)
 
         return abp
 
