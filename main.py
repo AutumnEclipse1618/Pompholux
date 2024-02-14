@@ -1,3 +1,4 @@
+import os
 import logging
 
 import discord.utils
@@ -8,19 +9,12 @@ import motor.motor_asyncio
 from bot.MyBot import MyBot
 
 
-config_files = [
-    "config/config.ini",
-    "config/versions.ini",
-]
-
-emoji_file = "config/emoji.json"
-
 if __name__ == "__main__":
-    app.config = ConfigReader.read_config(Config, *config_files)
+    app.config = ConfigReader.load_config(Config, os.getenv("CONFIG_FILE"))
 
     discord.utils.setup_logging(level=logging.INFO if app.config.Debug.DEBUG else logging.CRITICAL, root=True)
 
-    app.emoji, app.emoji_rev = EmojiReader.read_emoji(emoji_file)
+    app.emoji, app.emoji_rev = EmojiReader.read_emoji("config/emoji.json")
 
     app.bot = MyBot()
 

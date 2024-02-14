@@ -1,4 +1,4 @@
-dacite == 1.6.0
+dacite == 1.8.1
 jsonschema == 4.13.0
 
 discord.py >= 2.0.0
