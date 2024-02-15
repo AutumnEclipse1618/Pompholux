@@ -1,6 +1,6 @@
 dacite == 1.8.1
-jsonschema == 4.13.0
+jsonschema == 4.21.1
 
-discord.py >= 2.0.0
+discord.py == 2.3.2
 
-motor == 3.0.0
+motor == 3.3.2
