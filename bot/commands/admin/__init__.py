@@ -4,6 +4,7 @@ from app import app
 
 from .Autorole import AutoroleCog, AutoroleButtonsView, AutoroleDropdownView, edit_autorole
 from .Autochannel import AutochannelCog, join_member
+from .MiscAdmin import MiscAdminCog
 
 if TYPE_CHECKING:
     from typing import List, Type
@@ -17,6 +18,7 @@ cogs: "List[Type[commands.Cog]]" = [
     ##########
     AutoroleCog,
     AutochannelCog,
+    MiscAdminCog,
     ##########
 ]
 
